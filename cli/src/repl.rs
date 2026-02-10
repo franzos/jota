@@ -109,6 +109,7 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
         "status".into(),
         "faucet".into(),
         "seed".into(),
+        "password".into(), "passwd".into(),
         "help".into(),
         "exit".into(), "quit".into(), "q".into(),
     ];
@@ -127,6 +128,38 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                     Ok(Command::Exit) => {
                         println!("Goodbye.");
                         break;
+                    }
+                    Ok(Command::Password) => {
+                        print!("Change wallet password? [y/N]: ");
+                        use std::io::Write;
+                        std::io::stdout().flush().ok();
+                        let mut confirm = String::new();
+                        if std::io::stdin().read_line(&mut confirm).is_err()
+                            || confirm.trim().to_lowercase() != "y"
+                        {
+                            println!("Cancelled.");
+                            continue;
+                        }
+                        let old_pw = Zeroizing::new(
+                            rpassword::prompt_password("Current password: ")
+                                .unwrap_or_default(),
+                        );
+                        let new_pw = match prompt_new_password() {
+                            Ok(pw) => pw,
+                            Err(e) => {
+                                eprintln!("Error: {e}");
+                                continue;
+                            }
+                        };
+                        println!("Changing password...");
+                        match Wallet::change_password(
+                            &wallet_path,
+                            old_pw.as_bytes(),
+                            new_pw.as_bytes(),
+                        ) {
+                            Ok(()) => println!("Password changed."),
+                            Err(e) => eprintln!("Error: {e}"),
+                        }
                     }
                     Ok(cmd) => {
                         if let Some(prompt_msg) = cmd.confirmation_prompt() {

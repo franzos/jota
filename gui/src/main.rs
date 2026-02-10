@@ -122,6 +122,11 @@ enum Message {
 
     // Settings
     NetworkChanged(Network),
+    SettingsOldPasswordChanged(String),
+    SettingsNewPasswordChanged(String),
+    SettingsNewPasswordConfirmChanged(String),
+    ChangePassword,
+    ChangePasswordCompleted(Result<(), String>),
 }
 
 // -- App state --
@@ -156,6 +161,11 @@ struct App {
     stakes: Vec<StakedIotaSummary>,
     validator_address: String,
     stake_amount: String,
+
+    // Settings — password change
+    settings_old_password: Zeroizing<String>,
+    settings_new_password: Zeroizing<String>,
+    settings_new_password_confirm: Zeroizing<String>,
 
     // UI state
     loading: bool,
@@ -192,6 +202,9 @@ impl App {
             stakes: Vec::new(),
             validator_address: String::new(),
             stake_amount: String::new(),
+            settings_old_password: Zeroizing::new(String::new()),
+            settings_new_password: Zeroizing::new(String::new()),
+            settings_new_password_confirm: Zeroizing::new(String::new()),
             loading: false,
             error_message: None,
             success_message: None,
@@ -232,6 +245,9 @@ impl App {
         self.expanded_tx = None;
         self.validator_address.clear();
         self.stake_amount.clear();
+        self.settings_old_password.zeroize();
+        self.settings_new_password.zeroize();
+        self.settings_new_password_confirm.zeroize();
     }
 
     // -- Update --
@@ -700,6 +716,65 @@ impl App {
                     info.network_config = config;
                     info.is_mainnet = network == Network::Mainnet;
                     return self.refresh_dashboard();
+                }
+                Task::none()
+            }
+
+            Message::SettingsOldPasswordChanged(v) => {
+                self.settings_old_password = Zeroizing::new(v);
+                Task::none()
+            }
+            Message::SettingsNewPasswordChanged(v) => {
+                self.settings_new_password = Zeroizing::new(v);
+                Task::none()
+            }
+            Message::SettingsNewPasswordConfirmChanged(v) => {
+                self.settings_new_password_confirm = Zeroizing::new(v);
+                Task::none()
+            }
+
+            Message::ChangePassword => {
+                if self.settings_old_password.is_empty() {
+                    self.error_message = Some("Current password is required".into());
+                    return Task::none();
+                }
+                if self.settings_new_password.is_empty() {
+                    self.error_message = Some("New password is required".into());
+                    return Task::none();
+                }
+                if *self.settings_new_password != *self.settings_new_password_confirm {
+                    self.error_message = Some("New passwords don't match".into());
+                    return Task::none();
+                }
+                let name = self.selected_wallet.clone().unwrap_or_default();
+                let path = self.wallet_dir.join(format!("{name}.wallet"));
+                let old_pw = Zeroizing::new(self.settings_old_password.as_bytes().to_vec());
+                let new_pw = Zeroizing::new(self.settings_new_password.as_bytes().to_vec());
+                self.loading = true;
+                self.error_message = None;
+                self.success_message = None;
+
+                Task::perform(
+                    async move {
+                        Wallet::change_password(&path, &old_pw, &new_pw)?;
+                        Ok(())
+                    },
+                    |r: Result<(), anyhow::Error>| {
+                        Message::ChangePasswordCompleted(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+
+            Message::ChangePasswordCompleted(result) => {
+                self.loading = false;
+                match result {
+                    Ok(()) => {
+                        self.success_message = Some("Password changed".into());
+                        self.settings_old_password.zeroize();
+                        self.settings_new_password.zeroize();
+                        self.settings_new_password_confirm.zeroize();
+                    }
+                    Err(e) => self.error_message = Some(e),
                 }
                 Task::none()
             }
@@ -1667,6 +1742,47 @@ impl App {
                     .size(12)
                     .color([0.5, 0.5, 0.5]),
             );
+
+            // -- Change password --
+            col = col.push(Space::new().height(20));
+            col = col.push(text("Change Password").size(16));
+            col = col.push(Space::new().height(5));
+
+            let old_pw = text_input("Current password", &self.settings_old_password)
+                .on_input(Message::SettingsOldPasswordChanged)
+                .secure(true);
+            let new_pw = text_input("New password", &self.settings_new_password)
+                .on_input(Message::SettingsNewPasswordChanged)
+                .secure(true);
+            let new_pw2 = text_input("Confirm new password", &self.settings_new_password_confirm)
+                .on_input(Message::SettingsNewPasswordConfirmChanged)
+                .on_submit(Message::ChangePassword)
+                .secure(true);
+
+            let can_submit = !self.loading
+                && !self.settings_old_password.is_empty()
+                && !self.settings_new_password.is_empty()
+                && *self.settings_new_password == *self.settings_new_password_confirm;
+            let mut change_btn = button(text("Change Password").size(14));
+            if can_submit {
+                change_btn = change_btn.on_press(Message::ChangePassword);
+            }
+
+            col = col.push(old_pw);
+            col = col.push(new_pw);
+            col = col.push(new_pw2);
+            col = col.push(Space::new().height(5));
+            col = col.push(change_btn);
+
+            if self.loading {
+                col = col.push(text("Changing password...").size(14));
+            }
+            if let Some(msg) = &self.success_message {
+                col = col.push(text(msg.as_str()).size(14).color([0.5, 1.0, 0.5]));
+            }
+            if let Some(err) = &self.error_message {
+                col = col.push(text(err.as_str()).size(14).color([1.0, 0.3, 0.3]));
+            }
         }
 
         col.into()

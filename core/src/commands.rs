@@ -34,6 +34,8 @@ pub enum Command {
     Status { node_url: Option<String> },
     /// Show seed phrase (mnemonic)
     Seed,
+    /// Change wallet password
+    Password,
     /// Print help
     Help { command: Option<String> },
     /// Exit the wallet
@@ -171,6 +173,8 @@ impl Command {
 
             "seed" => Ok(Command::Seed),
 
+            "password" | "passwd" => Ok(Command::Password),
+
             "help" | "?" => Ok(Command::Help {
                 command: arg1.map(|s| s.to_string()),
             }),
@@ -201,6 +205,7 @@ impl Command {
                 validator,
             )),
             Command::Seed => Some("This will display sensitive data. Continue?".to_string()),
+            Command::Password => Some("Change wallet password?".to_string()),
             _ => None,
         }
     }
@@ -476,6 +481,10 @@ impl Command {
                 }
             }
 
+            Command::Password => {
+                bail!("The password command requires interactive mode. Use the REPL instead of --cmd.")
+            }
+
             Command::Help { command } => Ok(help_text(command.as_deref())),
 
             Command::Exit => Ok(String::new()),
@@ -525,6 +534,9 @@ pub fn help_text(command: Option<&str>) -> String {
         Some("seed") => {
             "seed\n  Display the wallet's seed phrase (mnemonic).\n  Keep this secret!".to_string()
         }
+        Some("password") | Some("passwd") => {
+            "password\n  Change the wallet's encryption password.\n  Alias: passwd".to_string()
+        }
         Some("exit") | Some("quit") | Some("q") => {
             "exit\n  Exit the wallet.\n  Aliases: quit, q".to_string()
         }
@@ -545,6 +557,7 @@ pub fn help_text(command: Option<&str>) -> String {
              \x20 status           Show network status\n\
              \x20 faucet           Request testnet/devnet tokens\n\
              \x20 seed             Show seed phrase\n\
+             \x20 password         Change wallet password\n\
              \x20 help [cmd]       Show help for a command\n\
              \x20 exit             Exit the wallet\n\
              \n\
@@ -639,6 +652,12 @@ mod tests {
     #[test]
     fn parse_faucet() {
         assert_eq!(Command::parse("faucet").unwrap(), Command::Faucet);
+    }
+
+    #[test]
+    fn parse_password() {
+        assert_eq!(Command::parse("password").unwrap(), Command::Password);
+        assert_eq!(Command::parse("passwd").unwrap(), Command::Password);
     }
 
     #[test]

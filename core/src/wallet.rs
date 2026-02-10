@@ -159,6 +159,25 @@ impl Wallet {
         })
     }
 
+    /// Change the encryption password for a wallet file.
+    /// Verifies the current password before re-encrypting.
+    pub fn change_password(
+        path: &Path,
+        old_password: &[u8],
+        new_password: &[u8],
+    ) -> Result<()> {
+        let plaintext = wallet_file::load_from_file(path, old_password)
+            .map_err(|e| match e {
+                wallet_file::WalletFileError::DecryptionFailed => {
+                    anyhow::anyhow!("Current password is incorrect")
+                }
+                other => anyhow::anyhow!("{other}"),
+            })?;
+        wallet_file::save_to_file(path, &plaintext, new_password)
+            .context("Failed to save wallet with new password")?;
+        Ok(())
+    }
+
     /// Re-encrypt and save the wallet to disk (e.g. after changing network config).
     pub fn save(&self, password: &[u8]) -> Result<()> {
         let json = Zeroizing::new(
@@ -314,6 +333,47 @@ mod tests {
             NetworkConfig::default(),
         );
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn change_password() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.wallet");
+
+        let wallet = Wallet::create_new(
+            path.clone(),
+            b"old-password",
+            NetworkConfig::default(),
+        )
+        .unwrap();
+        let original_address = *wallet.address();
+
+        // Change password
+        Wallet::change_password(&path, b"old-password", b"new-password").unwrap();
+
+        // Old password no longer works
+        assert!(Wallet::open(&path, b"old-password").is_err());
+
+        // New password works, data intact
+        let reopened = Wallet::open(&path, b"new-password").unwrap();
+        assert_eq!(*reopened.address(), original_address);
+    }
+
+    #[test]
+    fn change_password_wrong_old_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.wallet");
+
+        Wallet::create_new(
+            path.clone(),
+            b"correct",
+            NetworkConfig::default(),
+        )
+        .unwrap();
+
+        let result = Wallet::change_password(&path, b"wrong", b"new");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("incorrect"));
     }
 
     #[test]

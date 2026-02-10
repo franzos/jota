@@ -98,6 +98,7 @@ pub fn decrypt(data: &[u8], password: &[u8]) -> Result<Zeroizing<Vec<u8>>, Walle
 }
 
 /// Save encrypted data to a file, creating parent directories if needed.
+/// Uses atomic write (write to temp, fsync, rename) to prevent corruption.
 /// Sets restrictive permissions: directory 0700, file 0600 on Unix.
 pub fn save_to_file(
     path: &std::path::Path,
@@ -113,12 +114,29 @@ pub fn save_to_file(
         }
     }
     let encrypted = encrypt(plaintext, password)?;
-    std::fs::write(path, encrypted)?;
+
+    // Atomic write: temp file → fsync → rename
+    let tmp_path = path.with_extension("wallet.tmp");
+
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp_path)?;
+        file.write_all(&encrypted)?;
+        file.sync_all()?;
     }
+    #[cfg(not(unix))]
+    {
+        std::fs::write(&tmp_path, &encrypted)?;
+    }
+
+    std::fs::rename(&tmp_path, path)?;
     Ok(())
 }
 
