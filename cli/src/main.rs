@@ -4,6 +4,7 @@ use anyhow::{Context, Result, bail};
 use clap::Parser;
 use iota_wallet_core::commands::Command;
 use iota_wallet_core::network::NetworkClient;
+use iota_wallet_core::validate_wallet_name;
 use iota_wallet_core::wallet::{Network, NetworkConfig, Wallet};
 use std::path::PathBuf;
 use zeroize::Zeroizing;
@@ -124,23 +125,6 @@ impl Cli {
     }
 }
 
-/// Reject wallet names containing path separators or traversal sequences.
-fn validate_wallet_name(name: &str) -> Result<()> {
-    if name.is_empty() {
-        bail!("Wallet name cannot be empty.");
-    }
-    if name.contains('/') || name.contains('\\') || name.contains("..") {
-        bail!(
-            "Invalid wallet name '{name}'. Must not contain '/', '\\', or '..'."
-        );
-    }
-    if name.contains(std::path::MAIN_SEPARATOR) {
-        bail!(
-            "Invalid wallet name '{name}'. Must not contain path separators."
-        );
-    }
-    Ok(())
-}
 
 fn read_password_stdin() -> Result<Zeroizing<String>> {
     let mut password = String::new();

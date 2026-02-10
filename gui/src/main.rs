@@ -1,13 +1,14 @@
 use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
 use iced::{Color, Element, Fill, Length, Padding, Task, Theme};
 use std::path::{Path, PathBuf};
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 use iota_sdk::crypto::ed25519::Ed25519PrivateKey;
 use iota_sdk::crypto::FromMnemonic;
 use iota_sdk::types::{Address, ObjectId};
 
 use iota_wallet_core::display::{format_balance, nanos_to_iota, parse_iota_amount};
+use iota_wallet_core::validate_wallet_name;
 use iota_wallet_core::network::{
     NetworkClient, StakeStatus, StakedIotaSummary, TransactionDirection, TransactionFilter,
     TransactionSummary,
@@ -86,7 +87,7 @@ enum Message {
 
     // Create
     CreateWallet,
-    WalletCreated(Result<(WalletInfo, String), String>),
+    WalletCreated(Result<(WalletInfo, Zeroizing<String>), String>),
     MnemonicConfirmed,
 
     // Recover
@@ -134,15 +135,15 @@ struct App {
     network_config: NetworkConfig,
 
     // Form fields
-    password: String,
-    password_confirm: String,
+    password: Zeroizing<String>,
+    password_confirm: Zeroizing<String>,
     wallet_name: String,
-    mnemonic_input: String,
+    mnemonic_input: Zeroizing<String>,
     recipient: String,
     amount: String,
 
     // Create screen — mnemonic display
-    created_mnemonic: Option<String>,
+    created_mnemonic: Option<Zeroizing<String>>,
 
     // Dashboard
     balance: Option<u64>,
@@ -178,10 +179,10 @@ impl App {
             selected_wallet: None,
             wallet_info: None,
             network_config,
-            password: String::new(),
-            password_confirm: String::new(),
+            password: Zeroizing::new(String::new()),
+            password_confirm: Zeroizing::new(String::new()),
             wallet_name: String::from("default"),
-            mnemonic_input: String::new(),
+            mnemonic_input: Zeroizing::new(String::new()),
             recipient: String::new(),
             amount: String::new(),
             created_mnemonic: None,
@@ -219,9 +220,9 @@ impl App {
     }
 
     fn clear_form(&mut self) {
-        self.password.clear();
-        self.password_confirm.clear();
-        self.mnemonic_input.clear();
+        self.password.zeroize();
+        self.password_confirm.zeroize();
+        self.mnemonic_input.zeroize();
         self.recipient.clear();
         self.amount.clear();
         self.error_message = None;
@@ -263,11 +264,11 @@ impl App {
 
             // Form inputs
             Message::PasswordChanged(v) => {
-                self.password = v;
+                self.password = Zeroizing::new(v);
                 Task::none()
             }
             Message::PasswordConfirmChanged(v) => {
-                self.password_confirm = v;
+                self.password_confirm = Zeroizing::new(v);
                 Task::none()
             }
             Message::WalletNameChanged(v) => {
@@ -275,7 +276,7 @@ impl App {
                 Task::none()
             }
             Message::MnemonicInputChanged(v) => {
-                self.mnemonic_input = v;
+                self.mnemonic_input = Zeroizing::new(v);
                 Task::none()
             }
             Message::RecipientChanged(v) => {
@@ -291,7 +292,7 @@ impl App {
             Message::UnlockWallet => {
                 let name = self.selected_wallet.clone().unwrap_or_default();
                 let path = self.wallet_dir.join(format!("{name}.wallet"));
-                let pw = self.password.clone().into_bytes();
+                let pw = Zeroizing::new(self.password.as_bytes().to_vec());
                 self.loading = true;
                 self.error_message = None;
 
@@ -327,12 +328,16 @@ impl App {
                     return Task::none();
                 }
                 let name = self.wallet_name.clone();
+                if let Err(e) = validate_wallet_name(&name) {
+                    self.error_message = Some(e.to_string());
+                    return Task::none();
+                }
                 let path = self.wallet_dir.join(format!("{name}.wallet"));
                 if path.exists() {
                     self.error_message = Some(format!("Wallet '{name}' already exists"));
                     return Task::none();
                 }
-                let pw = self.password.clone().into_bytes();
+                let pw = Zeroizing::new(self.password.as_bytes().to_vec());
                 let config = self.network_config.clone();
                 self.loading = true;
                 self.error_message = None;
@@ -341,11 +346,11 @@ impl App {
                     async move {
                         std::fs::create_dir_all(path.parent().unwrap())?;
                         let wallet = Wallet::create_new(path, &pw, config)?;
-                        let mnemonic = wallet.mnemonic().to_string();
+                        let mnemonic = Zeroizing::new(wallet.mnemonic().to_string());
                         let info = WalletInfo::from_wallet(&wallet);
                         Ok((info, mnemonic))
                     },
-                    |r: Result<(WalletInfo, String), anyhow::Error>| {
+                    |r: Result<(WalletInfo, Zeroizing<String>), anyhow::Error>| {
                         Message::WalletCreated(r.map_err(|e| e.to_string()))
                     },
                 )
@@ -381,13 +386,17 @@ impl App {
                     return Task::none();
                 }
                 let name = self.wallet_name.clone();
+                if let Err(e) = validate_wallet_name(&name) {
+                    self.error_message = Some(e.to_string());
+                    return Task::none();
+                }
                 let path = self.wallet_dir.join(format!("{name}.wallet"));
                 if path.exists() {
                     self.error_message = Some(format!("Wallet '{name}' already exists"));
                     return Task::none();
                 }
-                let pw = self.password.clone().into_bytes();
-                let mnemonic = self.mnemonic_input.trim().to_string();
+                let pw = Zeroizing::new(self.password.as_bytes().to_vec());
+                let mnemonic = Zeroizing::new(self.mnemonic_input.trim().to_string());
                 let config = self.network_config.clone();
                 self.loading = true;
                 self.error_message = None;
@@ -1089,7 +1098,8 @@ impl App {
         let name = text_input("Wallet name", &self.wallet_name)
             .on_input(Message::WalletNameChanged);
         let mnemonic = text_input("24-word mnemonic phrase", &self.mnemonic_input)
-            .on_input(Message::MnemonicInputChanged);
+            .on_input(Message::MnemonicInputChanged)
+            .secure(true);
         let pw = text_input("Password", &self.password)
             .on_input(Message::PasswordChanged)
             .secure(true);
