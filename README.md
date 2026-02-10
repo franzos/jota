@@ -49,6 +49,9 @@ On first launch you'll be prompted to create a new wallet or recover from a seed
 
 ## GUI
 
+![Login](assets/login.png)
+![Account](assets/account.png)
+
 Launch the GUI with:
 
 ```bash
