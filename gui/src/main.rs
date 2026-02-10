@@ -16,6 +16,7 @@ use zeroize::{Zeroize, Zeroizing};
 use iota_sdk::crypto::ed25519::Ed25519PrivateKey;
 use iota_sdk::crypto::FromMnemonic;
 use iota_sdk::types::{Address, ObjectId};
+use std::fmt;
 
 use iota_wallet_core::display::{format_balance, nanos_to_iota, parse_iota_amount};
 use iota_wallet_core::{list_wallets, validate_wallet_name};
@@ -34,22 +35,33 @@ fn main() -> iced::Result {
 
 // -- Cloneable wallet info extracted after open/create --
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct WalletInfo {
     address: Address,
     address_string: String,
     network_config: NetworkConfig,
-    mnemonic: Zeroizing<String>,
+    private_key: Arc<Ed25519PrivateKey>,
     is_mainnet: bool,
+}
+
+impl fmt::Debug for WalletInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("WalletInfo")
+            .field("address", &self.address)
+            .field("is_mainnet", &self.is_mainnet)
+            .finish_non_exhaustive()
+    }
 }
 
 impl WalletInfo {
     fn from_wallet(wallet: &Wallet) -> Self {
+        let private_key = Ed25519PrivateKey::from_mnemonic(wallet.mnemonic(), None, None)
+            .expect("wallet mnemonic already validated");
         Self {
             address: *wallet.address(),
             address_string: wallet.address().to_string(),
             network_config: wallet.network_config().clone(),
-            mnemonic: Zeroizing::new(wallet.mnemonic().to_string()),
+            private_key: Arc::new(private_key),
             is_mainnet: wallet.is_mainnet(),
         }
     }
@@ -548,7 +560,7 @@ impl App {
                 };
                 let sender = info.address;
                 let config = info.network_config.clone();
-                let mnemonic = info.mnemonic.clone();
+                let pk = info.private_key.clone();
                 self.loading = true;
                 self.error_message = None;
 
@@ -556,8 +568,6 @@ impl App {
                     async move {
                         let recipient = Address::from_hex(&recipient_str)
                             .map_err(|e| anyhow::anyhow!("Invalid recipient address: {e}"))?;
-                        let pk = Ed25519PrivateKey::from_mnemonic(&mnemonic, None, None)
-                            .map_err(|e| anyhow::anyhow!("Failed to derive key: {e}"))?;
                         let net = NetworkClient::new(&config, false)?;
                         let result = net.send_iota(&pk, &sender, recipient, amount).await?;
                         Ok(result.digest)
@@ -641,7 +651,7 @@ impl App {
                 };
                 let sender = info.address;
                 let config = info.network_config.clone();
-                let mnemonic = info.mnemonic.clone();
+                let pk = info.private_key.clone();
                 self.loading = true;
                 self.error_message = None;
 
@@ -649,8 +659,6 @@ impl App {
                     async move {
                         let validator = Address::from_hex(&validator_str)
                             .map_err(|e| anyhow::anyhow!("Invalid validator address: {e}"))?;
-                        let pk = Ed25519PrivateKey::from_mnemonic(&mnemonic, None, None)
-                            .map_err(|e| anyhow::anyhow!("Failed to derive key: {e}"))?;
                         let net = NetworkClient::new(&config, false)?;
                         let result = net.stake_iota(&pk, &sender, validator, amount).await?;
                         Ok(result.digest)
@@ -681,7 +689,7 @@ impl App {
                 };
                 let sender = info.address;
                 let config = info.network_config.clone();
-                let mnemonic = info.mnemonic.clone();
+                let pk = info.private_key.clone();
                 self.loading = true;
                 self.error_message = None;
                 self.success_message = None;
@@ -690,8 +698,6 @@ impl App {
                     async move {
                         let object_id = ObjectId::from_hex(&object_id_str)
                             .map_err(|e| anyhow::anyhow!("Invalid object ID: {e}"))?;
-                        let pk = Ed25519PrivateKey::from_mnemonic(&mnemonic, None, None)
-                            .map_err(|e| anyhow::anyhow!("Failed to derive key: {e}"))?;
                         let net = NetworkClient::new(&config, false)?;
                         let result = net.unstake_iota(&pk, &sender, object_id).await?;
                         Ok(result.digest)
