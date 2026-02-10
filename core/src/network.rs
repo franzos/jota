@@ -66,6 +66,38 @@ impl NetworkClient {
         Ok(balance.unwrap_or(0))
     }
 
+    /// Dry-run, sign, and execute a built transaction.
+    async fn sign_and_execute(
+        &self,
+        tx: &Transaction,
+        private_key: &Ed25519PrivateKey,
+    ) -> Result<TransferResult> {
+        let dry_run = self
+            .client
+            .dry_run_tx(tx, false)
+            .await
+            .context("Dry run failed")?;
+        if let Some(err) = dry_run.error {
+            bail!("Transaction would fail: {err}");
+        }
+
+        let signature = private_key
+            .sign_transaction(tx)
+            .map_err(|e| anyhow::anyhow!("Failed to sign transaction: {e}"))?;
+
+        let effects = self
+            .client
+            .execute_tx(&[signature], tx, None)
+            .await
+            .context("Failed to execute transaction")?;
+
+        Ok(TransferResult {
+            digest: effects.digest().to_string(),
+            status: format!("{:?}", effects.status()),
+            net_gas_usage: effects.gas_summary().net_gas_usage(),
+        })
+    }
+
     /// Send IOTA from the signer's address to a recipient.
     /// Amount is in nanos (1 IOTA = 1_000_000_000 nanos).
     pub async fn send_iota(
@@ -77,36 +109,8 @@ impl NetworkClient {
     ) -> Result<TransferResult> {
         let mut builder = TransactionBuilder::new(*sender).with_client(&self.client);
         builder.send_iota(recipient, amount);
-
-        let tx = builder
-            .finish()
-            .await
-            .context("Failed to build transaction")?;
-
-        // Dry run first to catch errors before spending gas
-        let dry_run = self
-            .client
-            .dry_run_tx(&tx, false)
-            .await
-            .context("Dry run failed")?;
-        if let Some(err) = dry_run.error {
-            bail!("Transaction would fail: {err}");
-        }
-
-        let signature = private_key
-            .sign_transaction(&tx)
-            .map_err(|e| anyhow::anyhow!("Failed to sign transaction: {e}"))?;
-
-        let effects = self
-            .client
-            .execute_tx(&[signature], &tx, None)
-            .await
-            .context("Failed to execute transaction")?;
-
-        let digest = effects.digest().to_string();
-        let status = format!("{:?}", effects.status());
-
-        Ok(TransferResult { digest, status })
+        let tx = builder.finish().await.context("Failed to build transaction")?;
+        self.sign_and_execute(&tx, private_key).await
     }
 
     /// Stake IOTA to a validator.
@@ -120,35 +124,8 @@ impl NetworkClient {
     ) -> Result<TransferResult> {
         let mut builder = TransactionBuilder::new(*sender).with_client(&self.client);
         builder.stake(amount, validator);
-
-        let tx = builder
-            .finish()
-            .await
-            .context("Failed to build stake transaction")?;
-
-        let dry_run = self
-            .client
-            .dry_run_tx(&tx, false)
-            .await
-            .context("Dry run failed")?;
-        if let Some(err) = dry_run.error {
-            bail!("Stake transaction would fail: {err}");
-        }
-
-        let signature = private_key
-            .sign_transaction(&tx)
-            .map_err(|e| anyhow::anyhow!("Failed to sign transaction: {e}"))?;
-
-        let effects = self
-            .client
-            .execute_tx(&[signature], &tx, None)
-            .await
-            .context("Failed to execute stake transaction")?;
-
-        let digest = effects.digest().to_string();
-        let status = format!("{:?}", effects.status());
-
-        Ok(TransferResult { digest, status })
+        let tx = builder.finish().await.context("Failed to build stake transaction")?;
+        self.sign_and_execute(&tx, private_key).await
     }
 
     /// Unstake a previously staked IOTA object.
@@ -160,35 +137,8 @@ impl NetworkClient {
     ) -> Result<TransferResult> {
         let mut builder = TransactionBuilder::new(*sender).with_client(&self.client);
         builder.unstake(staked_object_id);
-
-        let tx = builder
-            .finish()
-            .await
-            .context("Failed to build unstake transaction")?;
-
-        let dry_run = self
-            .client
-            .dry_run_tx(&tx, false)
-            .await
-            .context("Dry run failed")?;
-        if let Some(err) = dry_run.error {
-            bail!("Unstake transaction would fail: {err}");
-        }
-
-        let signature = private_key
-            .sign_transaction(&tx)
-            .map_err(|e| anyhow::anyhow!("Failed to sign transaction: {e}"))?;
-
-        let effects = self
-            .client
-            .execute_tx(&[signature], &tx, None)
-            .await
-            .context("Failed to execute unstake transaction")?;
-
-        let digest = effects.digest().to_string();
-        let status = format!("{:?}", effects.status());
-
-        Ok(TransferResult { digest, status })
+        let tx = builder.finish().await.context("Failed to build unstake transaction")?;
+        self.sign_and_execute(&tx, private_key).await
     }
 
     /// Query all StakedIota objects owned by the given address, including
@@ -402,41 +352,16 @@ impl NetworkClient {
         // and the recipient receives the remainder.
         let mut builder = TransactionBuilder::new(*sender).with_client(&self.client);
         builder.transfer_objects(recipient, [UnresolvedArg::Gas]);
+        let tx = builder.finish().await.context("Failed to build sweep transaction")?;
 
-        let tx = builder
-            .finish()
-            .await
-            .context("Failed to build sweep transaction")?;
-
-        let dry_run = self
-            .client
-            .dry_run_tx(&tx, false)
-            .await
-            .context("Dry run failed")?;
-        if let Some(err) = dry_run.error {
-            bail!("Transaction would fail: {err}");
-        }
-
-        let signature = private_key
-            .sign_transaction(&tx)
-            .map_err(|e| anyhow::anyhow!("Failed to sign transaction: {e}"))?;
-
-        let effects = self
-            .client
-            .execute_tx(&[signature], &tx, None)
-            .await
-            .context("Failed to execute transaction")?;
-
-        let digest = effects.digest().to_string();
-        let status = format!("{:?}", effects.status());
-        let gas_cost = effects.gas_summary().net_gas_usage();
-        let amount = if gas_cost > 0 {
-            balance.saturating_sub(gas_cost as u64)
+        let result = self.sign_and_execute(&tx, private_key).await?;
+        let amount = if result.net_gas_usage > 0 {
+            balance.saturating_sub(result.net_gas_usage as u64)
         } else {
             balance
         };
 
-        Ok((TransferResult { digest, status }, amount))
+        Ok((result, amount))
     }
 
     /// Look up a transaction by its digest, returning data and effects.
@@ -580,6 +505,7 @@ impl NetworkClient {
 pub struct TransferResult {
     pub digest: String,
     pub status: String,
+    pub net_gas_usage: i64,
 }
 
 #[derive(Debug, Clone)]

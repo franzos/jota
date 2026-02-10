@@ -8,7 +8,7 @@ use iota_sdk::crypto::FromMnemonic;
 use iota_sdk::types::{Address, ObjectId};
 
 use iota_wallet_core::display::{format_balance, nanos_to_iota, parse_iota_amount};
-use iota_wallet_core::validate_wallet_name;
+use iota_wallet_core::{list_wallets, validate_wallet_name};
 use iota_wallet_core::network::{
     NetworkClient, StakeStatus, StakedIotaSummary, TransactionDirection, TransactionFilter,
     TransactionSummary,
@@ -1673,18 +1673,3 @@ impl App {
     }
 }
 
-fn list_wallets(dir: &Path) -> Vec<String> {
-    let mut names = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().map(|e| e == "wallet").unwrap_or(false) {
-                if let Some(stem) = path.file_stem() {
-                    names.push(stem.to_string_lossy().to_string());
-                }
-            }
-        }
-    }
-    names.sort();
-    names
-}

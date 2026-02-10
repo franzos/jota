@@ -1,6 +1,7 @@
 /// REPL shell — Reedline-based interactive wallet session.
 use anyhow::{Context, Result};
 use iota_wallet_core::commands::Command;
+use iota_wallet_core::list_wallets;
 use iota_wallet_core::network::NetworkClient;
 use iota_wallet_core::wallet::Wallet;
 use reedline::{DefaultCompleter, DefaultPrompt, DefaultPromptSegment, Reedline, Signal};
@@ -172,21 +173,6 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-fn list_wallets(dir: &std::path::Path) -> Vec<String> {
-    let mut names = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().map(|e| e == "wallet").unwrap_or(false) {
-                if let Some(stem) = path.file_stem() {
-                    names.push(stem.to_string_lossy().to_string());
-                }
-            }
-        }
-    }
-    names.sort();
-    names
-}
 
 enum WalletAction {
     CreateNew,

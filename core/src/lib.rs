@@ -25,3 +25,20 @@ pub fn validate_wallet_name(name: &str) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+/// List wallet files in a directory (stem names of `.wallet` files).
+pub fn list_wallets(dir: &std::path::Path) -> Vec<String> {
+    let mut names = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map(|e| e == "wallet").unwrap_or(false) {
+                if let Some(stem) = path.file_stem() {
+                    names.push(stem.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    names.sort();
+    names
+}
