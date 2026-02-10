@@ -1,6 +1,8 @@
-# iota-wallet
+# IOTA Wallet
 
-A Monero-inspired REPL wallet for IOTA Rebased. Supports interactive mode, one-shot commands for scripting, and encrypted wallet files.
+A Monero-inspired REPL/GUI wallet for IOTA Rebased. Supports interactive mode, one-shot commands for scripting, and encrypted wallet files.
+
+NOTE: This is an early prototype. Use at your own risk. Always test with small amounts first and verify transactions on the explorer.
 
 ## Install
 
@@ -44,6 +46,8 @@ iota-wallet --wallet mywallet --password-stdin --cmd "balance" < password.txt
 ```
 
 On first launch you'll be prompted to create a new wallet or recover from a seed phrase. The wallet file is encrypted with your password (argon2id + AES-256-GCM).
+
+To access the GUI, run `iota-wallet-gui`.
 
 ## Commands
 

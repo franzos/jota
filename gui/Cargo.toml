@@ -1,0 +1,22 @@
+[package]
+name = "iota-wallet-gui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "iota-wallet-gui"
+path = "src/main.rs"
+
+[dependencies]
+iota-wallet-core = { path = "../core" }
+iota-sdk = { git = "https://github.com/iotaledger/iota-rust-sdk", tag = "iota-sdk-v3.0.0-alpha.1", package = "iota-sdk" }
+iced = { version = "0.14", features = ["tokio"] }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+zeroize = { version = "1", features = ["derive"] }
+dirs = "5"
+arboard = "3"
+open = "5"
