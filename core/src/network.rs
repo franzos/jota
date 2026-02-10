@@ -7,8 +7,9 @@ use iota_sdk::graphql_client::pagination::PaginationFilter;
 use iota_sdk::graphql_client::query_types::{ObjectFilter, TransactionsFilter};
 use iota_sdk::graphql_client::Client;
 use iota_sdk::transaction_builder::TransactionBuilder;
+use iota_sdk::transaction_builder::unresolved::Argument as UnresolvedArg;
 use iota_sdk::types::{
-    Address, Argument, Command as TxCommand, Input, ObjectId, StructTag, Transaction,
+    Address, Argument, Command as TxCommand, Digest, Input, ObjectId, StructTag, Transaction,
     TransactionKind,
 };
 
@@ -276,7 +277,10 @@ impl NetworkClient {
                 all.push(tx);
             }
         }
-        all.sort_by(|a, b| b.digest.cmp(&a.digest));
+        all.sort_by(|a, b| {
+            b.epoch.cmp(&a.epoch)
+                .then(b.lamport_version.cmp(&a.lamport_version))
+        });
 
         // Apply filter
         match filter {
@@ -311,11 +315,129 @@ impl NetworkClient {
                 };
                 let net = item.effects.gas_summary().net_gas_usage();
                 let fee = if net > 0 { Some(net as u64) } else { None };
-                TransactionSummary { digest, direction: Some(direction), timestamp: None, sender, amount, fee }
+                let epoch = item.effects.epoch();
+                let lamport_version = item.effects.as_v1().lamport_version;
+                TransactionSummary {
+                    digest,
+                    direction: Some(direction),
+                    timestamp: None,
+                    sender,
+                    amount,
+                    fee,
+                    epoch,
+                    lamport_version,
+                }
             })
             .collect();
 
         Ok(summaries)
+    }
+
+    /// Sweep the entire balance to a recipient address by transferring the gas
+    /// coin directly. The network deducts gas from it; the recipient gets the
+    /// rest. No dust remains with the sender.
+    pub async fn sweep_all(
+        &self,
+        private_key: &Ed25519PrivateKey,
+        sender: &Address,
+        recipient: Address,
+    ) -> Result<(TransferResult, u64)> {
+        let balance = self.balance(sender).await?;
+        if balance == 0 {
+            bail!("Nothing to sweep — balance is 0.");
+        }
+
+        // Transfer the gas coin itself — the network deducts gas from it
+        // and the recipient receives the remainder.
+        let mut builder = TransactionBuilder::new(*sender).with_client(&self.client);
+        builder.transfer_objects(recipient, [UnresolvedArg::Gas]);
+
+        let tx = builder
+            .finish()
+            .await
+            .context("Failed to build sweep transaction")?;
+
+        let dry_run = self
+            .client
+            .dry_run_tx(&tx, false)
+            .await
+            .context("Dry run failed")?;
+        if let Some(err) = dry_run.error {
+            bail!("Transaction would fail: {err}");
+        }
+
+        let signature = private_key
+            .sign_transaction(&tx)
+            .map_err(|e| anyhow::anyhow!("Failed to sign transaction: {e}"))?;
+
+        let effects = self
+            .client
+            .execute_tx(&[signature], &tx, None)
+            .await
+            .context("Failed to execute transaction")?;
+
+        let digest = effects.digest().to_string();
+        let status = format!("{:?}", effects.status());
+        let gas_cost = effects.gas_summary().net_gas_usage();
+        let amount = if gas_cost > 0 {
+            balance.saturating_sub(gas_cost as u64)
+        } else {
+            balance
+        };
+
+        Ok((TransferResult { digest, status }, amount))
+    }
+
+    /// Look up a transaction by its digest, returning data and effects.
+    pub async fn transaction_details(
+        &self,
+        digest: &Digest,
+    ) -> Result<TransactionDetailsSummary> {
+        let data_effects = self
+            .client
+            .transaction_data_effects(*digest)
+            .await
+            .context("Failed to query transaction")?
+            .ok_or_else(|| anyhow::anyhow!("Transaction not found: {digest}"))?;
+
+        let tx = &data_effects.tx.transaction;
+        let effects = &data_effects.effects;
+
+        let (sender, amount) = match tx {
+            Transaction::V1(v1) => {
+                let sender = v1.sender.to_string();
+                let amount = extract_transfer_amount(&v1.kind);
+                (sender, amount)
+            }
+        };
+
+        let status = format!("{:?}", effects.status());
+        let gas = effects.gas_summary();
+        let net = gas.net_gas_usage();
+        let fee = if net > 0 { Some(net as u64) } else { None };
+
+        // Try to extract the recipient from the TransferObjects command
+        let recipient = match tx {
+            Transaction::V1(v1) => extract_transfer_recipient(&v1.kind),
+        };
+
+        Ok(TransactionDetailsSummary {
+            digest: digest.to_string(),
+            status,
+            sender,
+            recipient,
+            amount,
+            fee,
+        })
+    }
+
+    /// Query the current reference gas price from the network.
+    pub async fn reference_gas_price(&self) -> Result<u64> {
+        self.client
+            .reference_gas_price(None)
+            .await
+            .context("Failed to query reference gas price")?
+            .ok_or_else(|| anyhow::anyhow!("No reference gas price available"))
     }
 
     pub fn network(&self) -> &Network {
@@ -330,6 +452,16 @@ impl NetworkClient {
 pub struct TransferResult {
     pub digest: String,
     pub status: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct TransactionDetailsSummary {
+    pub digest: String,
+    pub status: String,
+    pub sender: String,
+    pub recipient: Option<String>,
+    pub amount: Option<u64>,
+    pub fee: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -392,6 +524,10 @@ pub struct TransactionSummary {
     pub amount: Option<u64>,
     /// Net gas fee in nanos (computation + storage - rebate).
     pub fee: Option<u64>,
+    /// Epoch in which this transaction was executed.
+    pub epoch: u64,
+    /// Lamport version — monotonically increasing, used for chronological sorting.
+    pub lamport_version: u64,
 }
 
 /// Best-effort extraction of the transfer amount from a ProgrammableTransaction.
@@ -414,6 +550,29 @@ fn extract_transfer_amount(kind: &TransactionKind) -> Option<u64> {
             }
             if total > 0 {
                 return Some(total);
+            }
+        }
+    }
+    None
+}
+
+/// Best-effort extraction of the transfer recipient from a ProgrammableTransaction.
+/// Looks for TransferObjects commands with a pure address argument.
+fn extract_transfer_recipient(kind: &TransactionKind) -> Option<String> {
+    let ptb = kind.as_programmable_transaction_opt()?;
+    for cmd in &ptb.commands {
+        if let TxCommand::TransferObjects(transfer) = cmd {
+            if let Argument::Input(idx) = &transfer.address {
+                if let Some(Input::Pure { value }) = ptb.inputs.get(*idx as usize) {
+                    if value.len() == 32 {
+                        let addr = Address::new({
+                            let mut arr = [0u8; 32];
+                            arr.copy_from_slice(value);
+                            arr
+                        });
+                        return Some(addr.to_string());
+                    }
+                }
             }
         }
     }

@@ -52,10 +52,13 @@ On first launch you'll be prompted to create a new wallet or recover from a seed
 | `balance` | Show wallet balance |
 | `address` | Show wallet address |
 | `transfer <addr> <amount>` | Send IOTA to an address |
+| `sweep_all <addr>` | Send entire balance minus gas |
 | `show_transfers [in\|out\|all]` | Show transaction history |
+| `show_transfer <digest>` | Look up a transaction by digest |
 | `stake <validator> <amount>` | Stake IOTA to a [validator](https://explorer.iota.org/validators) |
 | `unstake <object_id>` | Unstake a staked IOTA object |
 | `stakes` | Show active stakes |
+| `fee` | Show current reference gas price |
 | `faucet` | Request testnet/devnet tokens |
 | `seed` | Display seed phrase (requires confirmation) |
 | `help [cmd]` | Show help |

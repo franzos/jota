@@ -1,7 +1,7 @@
 /// Output formatting — IOTA denomination conversion and display helpers.
 ///
 /// IOTA uses 9 decimal places (nanos). 1 IOTA = 1_000_000_000 nanos.
-use crate::network::{StakedIotaSummary, TransactionDirection, TransactionSummary};
+use crate::network::{StakedIotaSummary, TransactionDetailsSummary, TransactionDirection, TransactionSummary};
 
 const NANOS_PER_IOTA: u64 = 1_000_000_000;
 
@@ -127,6 +127,31 @@ pub fn format_stakes(stakes: &[StakedIotaSummary]) -> String {
     }
     lines.push(format!("\nTotal staked: {}", format_balance(total)));
     lines.join("\n")
+}
+
+/// Format a single transaction's details for display.
+#[must_use]
+pub fn format_transaction_details(tx: &TransactionDetailsSummary) -> String {
+    let mut lines = Vec::new();
+    lines.push(format!("  Digest:    {}", tx.digest));
+    lines.push(format!("  Status:    {}", tx.status));
+    lines.push(format!("  Sender:    {}", tx.sender));
+    if let Some(ref recipient) = tx.recipient {
+        lines.push(format!("  Recipient: {}", recipient));
+    }
+    if let Some(amount) = tx.amount {
+        lines.push(format!("  Amount:    {}", format_balance(amount)));
+    }
+    if let Some(fee) = tx.fee {
+        lines.push(format!("  Gas fee:   {}", format_balance(fee)));
+    }
+    lines.join("\n")
+}
+
+/// Format the reference gas price for display.
+#[must_use]
+pub fn format_gas_price(nanos_per_unit: u64) -> String {
+    format!("Reference gas price: {} nanos per gas unit", nanos_per_unit)
 }
 
 /// Format balance as JSON.
@@ -267,6 +292,8 @@ mod tests {
                 sender: Some("0x1234567890abcdef".to_string()),
                 amount: Some(1_500_000_000),
                 fee: Some(1_234_500),
+                epoch: 1,
+                lamport_version: 100,
             },
             TransactionSummary {
                 digest: "0xffeeddccbbaa9988".to_string(),
@@ -275,6 +302,8 @@ mod tests {
                 sender: Some("0x9876543210fedcba".to_string()),
                 amount: Some(2_000_000_000),
                 fee: Some(2_345_600),
+                epoch: 1,
+                lamport_version: 101,
             },
         ];
         let output = format_transactions(&txs);
@@ -308,6 +337,8 @@ mod tests {
                 sender: None,
                 amount: None,
                 fee: None,
+                epoch: 0,
+                lamport_version: 0,
             },
         ];
         let output = format_transactions(&txs);

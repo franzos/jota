@@ -1,6 +1,6 @@
 /// Command definitions and parsing for the wallet REPL and one-shot mode.
 use anyhow::{Result, bail};
-use iota_sdk::types::{Address, ObjectId};
+use iota_sdk::types::{Address, Digest, ObjectId};
 
 use crate::display;
 use crate::network::{NetworkClient, TransactionFilter};
@@ -14,8 +14,14 @@ pub enum Command {
     Address,
     /// Transfer IOTA to another address: transfer <address> <amount>
     Transfer { recipient: Address, amount: u64 },
+    /// Sweep entire balance minus gas to an address: sweep_all <address>
+    SweepAll { recipient: Address },
     /// Show transaction history: show_transfers [in|out|all]
     ShowTransfers { filter: TransactionFilter },
+    /// Look up a transaction by digest: show_transfer <digest>
+    ShowTransfer { digest: Digest },
+    /// Show current reference gas price
+    Fee,
     /// Request faucet tokens (testnet/devnet only)
     Faucet,
     /// Stake IOTA to a validator: stake <validator_address> <amount>
@@ -77,10 +83,40 @@ impl Command {
                 Ok(Command::Transfer { recipient, amount })
             }
 
+            "sweep_all" | "sweep" => {
+                let addr_str = arg1.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Missing recipient address. Usage: sweep_all <address>"
+                    )
+                })?;
+
+                let recipient = Address::from_hex(addr_str).map_err(|e| {
+                    anyhow::anyhow!("Invalid recipient address '{addr_str}': {e}")
+                })?;
+
+                Ok(Command::SweepAll { recipient })
+            }
+
             "show_transfers" | "transfers" | "txs" => {
                 let filter = TransactionFilter::from_str_opt(arg1);
                 Ok(Command::ShowTransfers { filter })
             }
+
+            "show_transfer" | "tx" => {
+                let digest_str = arg1.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Missing transaction digest. Usage: show_transfer <digest>"
+                    )
+                })?;
+
+                let digest = Digest::from_base58(digest_str).map_err(|e| {
+                    anyhow::anyhow!("Invalid transaction digest '{digest_str}': {e}")
+                })?;
+
+                Ok(Command::ShowTransfer { digest })
+            }
+
+            "fee" | "gas" => Ok(Command::Fee),
 
             "stake" => {
                 let addr_str = arg1.ok_or_else(|| {
@@ -142,10 +178,23 @@ impl Command {
     }
 
     /// Returns a confirmation prompt if this command should ask before executing.
-    pub fn confirmation_prompt(&self) -> Option<&'static str> {
+    pub fn confirmation_prompt(&self) -> Option<String> {
         match self {
-            Command::Seed => Some("This will display sensitive data. Continue?"),
-            Command::Stake { .. } => Some("This will stake IOTA to a validator. Continue?"),
+            Command::Transfer { recipient, amount } => Some(format!(
+                "Send {} to {}?",
+                display::format_balance(*amount),
+                recipient,
+            )),
+            Command::SweepAll { recipient } => Some(format!(
+                "Sweep entire balance to {}?",
+                recipient,
+            )),
+            Command::Stake { validator, amount } => Some(format!(
+                "Stake {} to validator {}?",
+                display::format_balance(*amount),
+                validator,
+            )),
+            Command::Seed => Some("This will display sensitive data. Continue?".to_string()),
             _ => None,
         }
     }
@@ -206,6 +255,35 @@ impl Command {
                 }
             }
 
+            Command::SweepAll { recipient } => {
+                let (result, amount) = network
+                    .sweep_all(
+                        wallet.private_key(),
+                        wallet.address(),
+                        *recipient,
+                    )
+                    .await?;
+
+                if json_output {
+                    Ok(serde_json::json!({
+                        "digest": result.digest,
+                        "status": result.status,
+                        "amount_nanos": amount,
+                        "amount_iota": display::nanos_to_iota(amount),
+                        "recipient": recipient.to_string(),
+                    })
+                    .to_string())
+                } else {
+                    Ok(format!(
+                        "Sweep sent!\n  Digest: {}\n  Status: {}\n  Amount: {} -> {}",
+                        result.digest,
+                        result.status,
+                        display::format_balance(amount),
+                        recipient,
+                    ))
+                }
+            }
+
             Command::ShowTransfers { filter } => {
                 let txs = network.transactions(wallet.address(), filter.clone()).await?;
                 if json_output {
@@ -225,6 +303,35 @@ impl Command {
                     Ok(serde_json::to_string_pretty(&json_txs)?)
                 } else {
                     Ok(display::format_transactions(&txs))
+                }
+            }
+
+            Command::ShowTransfer { digest } => {
+                let details = network.transaction_details(digest).await?;
+                if json_output {
+                    Ok(serde_json::json!({
+                        "digest": details.digest,
+                        "status": details.status,
+                        "sender": details.sender,
+                        "recipient": details.recipient,
+                        "amount": details.amount,
+                        "fee": details.fee,
+                    })
+                    .to_string())
+                } else {
+                    Ok(display::format_transaction_details(&details))
+                }
+            }
+
+            Command::Fee => {
+                let gas_price = network.reference_gas_price().await?;
+                if json_output {
+                    Ok(serde_json::json!({
+                        "reference_gas_price": gas_price,
+                    })
+                    .to_string())
+                } else {
+                    Ok(display::format_gas_price(gas_price))
                 }
             }
 
@@ -354,8 +461,17 @@ pub fn help_text(command: Option<&str>) -> String {
         Some("transfer") | Some("send") => {
             "transfer <address> <amount>\n  Send IOTA to another address.\n  Amount is in IOTA (e.g. '1.5' for 1.5 IOTA).\n  Alias: send".to_string()
         }
+        Some("sweep_all") | Some("sweep") => {
+            "sweep_all <address>\n  Send entire balance minus gas to an address.\n  Alias: sweep".to_string()
+        }
         Some("show_transfers") | Some("transfers") | Some("txs") => {
             "show_transfers [in|out|all]\n  Show transaction history.\n  Filter: 'in' (received), 'out' (sent), 'all' (default).\n  Aliases: transfers, txs".to_string()
+        }
+        Some("show_transfer") | Some("tx") => {
+            "show_transfer <digest>\n  Look up a specific transaction by its digest.\n  Alias: tx".to_string()
+        }
+        Some("fee") | Some("gas") => {
+            "fee\n  Show the current reference gas price.\n  Alias: gas".to_string()
         }
         Some("stake") => {
             "stake <validator_address> <amount>\n  Stake IOTA to a validator.\n  Amount is in IOTA (e.g. '1.5' for 1.5 IOTA).\n  Find validators at https://explorer.iota.org/validators".to_string()
@@ -382,7 +498,10 @@ pub fn help_text(command: Option<&str>) -> String {
              \x20 balance          Show wallet balance\n\
              \x20 address          Show wallet address\n\
              \x20 transfer         Send IOTA to an address\n\
+             \x20 sweep_all        Sweep entire balance to an address\n\
              \x20 show_transfers   Show transaction history\n\
+             \x20 show_transfer    Look up a transaction by digest\n\
+             \x20 fee              Show current reference gas price\n\
              \x20 stake            Stake IOTA to a validator\n\
              \x20 unstake          Unstake a staked IOTA object\n\
              \x20 stakes           Show active stakes\n\
@@ -606,6 +725,53 @@ mod tests {
             amount: 1_000_000_000,
         };
         assert!(cmd.confirmation_prompt().is_some());
+    }
+
+    #[test]
+    fn transfer_requires_confirmation() {
+        let cmd = Command::Transfer {
+            recipient: Address::ZERO,
+            amount: 1_000_000_000,
+        };
+        let prompt = cmd.confirmation_prompt().unwrap();
+        assert!(prompt.contains("1.000000000 IOTA"));
+    }
+
+    #[test]
+    fn sweep_all_requires_confirmation() {
+        let cmd = Command::SweepAll {
+            recipient: Address::ZERO,
+        };
+        assert!(cmd.confirmation_prompt().is_some());
+    }
+
+    #[test]
+    fn parse_sweep_all() {
+        let cmd = Command::parse(
+            "sweep_all 0x0000a4984bd495d4346fa208ddff4f5d5e5ad48c21dec631ddebc99809f16900",
+        )
+        .unwrap();
+        assert!(matches!(cmd, Command::SweepAll { .. }));
+    }
+
+    #[test]
+    fn parse_sweep_alias() {
+        let cmd = Command::parse(
+            "sweep 0x0000a4984bd495d4346fa208ddff4f5d5e5ad48c21dec631ddebc99809f16900",
+        )
+        .unwrap();
+        assert!(matches!(cmd, Command::SweepAll { .. }));
+    }
+
+    #[test]
+    fn parse_sweep_all_missing_address() {
+        assert!(Command::parse("sweep_all").is_err());
+    }
+
+    #[test]
+    fn parse_fee() {
+        assert_eq!(Command::parse("fee").unwrap(), Command::Fee);
+        assert_eq!(Command::parse("gas").unwrap(), Command::Fee);
     }
 
     #[test]
