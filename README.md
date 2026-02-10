@@ -57,8 +57,8 @@ On first launch you'll be prompted to create a new wallet or recover from a seed
 | `show_transfer <digest>` | Look up a transaction by digest |
 | `stake <validator> <amount>` | Stake IOTA to a [validator](https://explorer.iota.org/validators) |
 | `unstake <object_id>` | Unstake a staked IOTA object |
-| `stakes` | Show active stakes |
-| `fee` | Show current reference gas price |
+| `stakes` | Show active stakes and rewards |
+| `status [node_url]` | Show epoch, gas price, network, and node URL |
 | `faucet` | Request testnet/devnet tokens |
 | `seed` | Display seed phrase (requires confirmation) |
 | `help [cmd]` | Show help |

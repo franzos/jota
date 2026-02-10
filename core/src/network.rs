@@ -18,27 +18,41 @@ use crate::wallet::{Network, NetworkConfig};
 pub struct NetworkClient {
     client: Client,
     network: Network,
+    node_url: String,
 }
 
 impl NetworkClient {
     pub fn new(config: &NetworkConfig) -> Result<Self> {
-        let client = match &config.network {
-            Network::Testnet => Client::new_testnet(),
-            Network::Mainnet => Client::new_mainnet(),
-            Network::Devnet => Client::new_devnet(),
+        let (client, node_url) = match &config.network {
+            Network::Testnet => (Client::new_testnet(), "https://graphql.testnet.iota.cafe".to_string()),
+            Network::Mainnet => (Client::new_mainnet(), "https://graphql.mainnet.iota.cafe".to_string()),
+            Network::Devnet => (Client::new_devnet(), "https://graphql.devnet.iota.cafe".to_string()),
             Network::Custom => {
                 let url = config
                     .custom_url
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("Custom network requires a node URL"))?;
-                Client::new(url)
-                    .context("Failed to create client with custom URL")?
+                let c = Client::new(url)
+                    .context("Failed to create client with custom URL")?;
+                (c, url.clone())
             }
         };
 
         Ok(Self {
             client,
             network: config.network,
+            node_url,
+        })
+    }
+
+    /// Create a client pointed at an arbitrary GraphQL endpoint.
+    pub fn new_custom(url: &str) -> Result<Self> {
+        let client = Client::new(url)
+            .context("Failed to create client with custom URL")?;
+        Ok(Self {
+            client,
+            network: Network::Custom,
+            node_url: url.to_string(),
         })
     }
 
@@ -468,13 +482,28 @@ impl NetworkClient {
         })
     }
 
-    /// Query the current reference gas price from the network.
-    pub async fn reference_gas_price(&self) -> Result<u64> {
-        self.client
-            .reference_gas_price(None)
+    /// Query network status: current epoch, gas price, and node URL.
+    pub async fn status(&self) -> Result<NetworkStatus> {
+        let epoch = self
+            .client
+            .epoch(None)
             .await
-            .context("Failed to query reference gas price")?
-            .ok_or_else(|| anyhow::anyhow!("No reference gas price available"))
+            .context("Failed to query epoch")?
+            .context("No epoch data available")?;
+
+        let epoch_id = epoch.epoch_id;
+        let reference_gas_price = epoch
+            .reference_gas_price
+            .and_then(|b| u64::try_from(b).ok())
+            .unwrap_or(0);
+        let node_url = self.node_url.clone();
+
+        Ok(NetworkStatus {
+            epoch: epoch_id,
+            reference_gas_price,
+            network: self.network,
+            node_url,
+        })
     }
 
     pub fn network(&self) -> &Network {
@@ -489,6 +518,14 @@ impl NetworkClient {
 pub struct TransferResult {
     pub digest: String,
     pub status: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct NetworkStatus {
+    pub epoch: u64,
+    pub reference_gas_price: u64,
+    pub network: Network,
+    pub node_url: String,
 }
 
 #[derive(Debug, Clone)]

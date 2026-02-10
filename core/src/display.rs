@@ -1,7 +1,7 @@
 /// Output formatting — IOTA denomination conversion and display helpers.
 ///
 /// IOTA uses 9 decimal places (nanos). 1 IOTA = 1_000_000_000 nanos.
-use crate::network::{StakeStatus, StakedIotaSummary, TransactionDetailsSummary, TransactionDirection, TransactionSummary};
+use crate::network::{NetworkStatus, StakeStatus, StakedIotaSummary, TransactionDetailsSummary, TransactionDirection, TransactionSummary};
 
 const NANOS_PER_IOTA: u64 = 1_000_000_000;
 
@@ -167,10 +167,16 @@ pub fn format_transaction_details(tx: &TransactionDetailsSummary) -> String {
     lines.join("\n")
 }
 
-/// Format the reference gas price for display.
+/// Format network status for display.
 #[must_use]
-pub fn format_gas_price(nanos_per_unit: u64) -> String {
-    format!("Reference gas price: {} nanos per gas unit", nanos_per_unit)
+pub fn format_status(status: &NetworkStatus) -> String {
+    format!(
+        "  Network:   {}\n  Epoch:     {}\n  Gas price: {} nanos/unit\n  Node:      {}",
+        status.network,
+        status.epoch,
+        status.reference_gas_price,
+        status.node_url,
+    )
 }
 
 /// Format balance as JSON.

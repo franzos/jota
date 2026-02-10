@@ -20,8 +20,6 @@ pub enum Command {
     ShowTransfers { filter: TransactionFilter },
     /// Look up a transaction by digest: show_transfer <digest>
     ShowTransfer { digest: Digest },
-    /// Show current reference gas price
-    Fee,
     /// Request faucet tokens (testnet/devnet only)
     Faucet,
     /// Stake IOTA to a validator: stake <validator_address> <amount>
@@ -30,6 +28,8 @@ pub enum Command {
     Unstake { staked_object_id: ObjectId },
     /// Show all active stakes
     Stakes,
+    /// Show network status: status [node_url]
+    Status { node_url: Option<String> },
     /// Show seed phrase (mnemonic)
     Seed,
     /// Print help
@@ -116,8 +116,6 @@ impl Command {
                 Ok(Command::ShowTransfer { digest })
             }
 
-            "fee" | "gas" => Ok(Command::Fee),
-
             "stake" => {
                 let addr_str = arg1.ok_or_else(|| {
                     anyhow::anyhow!(
@@ -160,6 +158,10 @@ impl Command {
             }
 
             "stakes" => Ok(Command::Stakes),
+
+            "status" => Ok(Command::Status {
+                node_url: arg1.map(|s| s.to_string()),
+            }),
 
             "faucet" => Ok(Command::Faucet),
 
@@ -323,18 +325,6 @@ impl Command {
                 }
             }
 
-            Command::Fee => {
-                let gas_price = network.reference_gas_price().await?;
-                if json_output {
-                    Ok(serde_json::json!({
-                        "reference_gas_price": gas_price,
-                    })
-                    .to_string())
-                } else {
-                    Ok(display::format_gas_price(gas_price))
-                }
-            }
-
             Command::Stake { validator, amount } => {
                 let result = network
                     .stake_iota(
@@ -414,6 +404,24 @@ impl Command {
                 }
             }
 
+            Command::Status { node_url } => {
+                let status = match node_url {
+                    Some(url) => NetworkClient::new_custom(url)?.status().await?,
+                    None => network.status().await?,
+                };
+                if json_output {
+                    Ok(serde_json::json!({
+                        "epoch": status.epoch,
+                        "reference_gas_price": status.reference_gas_price,
+                        "network": status.network.to_string(),
+                        "node_url": status.node_url,
+                    })
+                    .to_string())
+                } else {
+                    Ok(display::format_status(&status))
+                }
+            }
+
             Command::Faucet => {
                 if wallet.is_mainnet() {
                     bail!("Faucet is not available on mainnet.");
@@ -473,9 +481,6 @@ pub fn help_text(command: Option<&str>) -> String {
         Some("show_transfer") | Some("tx") => {
             "show_transfer <digest>\n  Look up a specific transaction by its digest.\n  Alias: tx".to_string()
         }
-        Some("fee") | Some("gas") => {
-            "fee\n  Show the current reference gas price.\n  Alias: gas".to_string()
-        }
         Some("stake") => {
             "stake <validator_address> <amount>\n  Stake IOTA to a validator.\n  Amount is in IOTA (e.g. '1.5' for 1.5 IOTA).\n  Find validators at https://explorer.iota.org/validators".to_string()
         }
@@ -484,6 +489,9 @@ pub fn help_text(command: Option<&str>) -> String {
         }
         Some("stakes") => {
             "stakes\n  Show all active stakes for this wallet.".to_string()
+        }
+        Some("status") => {
+            "status [node_url]\n  Show current epoch, gas price, network, and node URL.\n  Optionally query a different node.".to_string()
         }
         Some("faucet") => {
             "faucet\n  Request test tokens from the faucet.\n  Only available on testnet and devnet.".to_string()
@@ -504,10 +512,10 @@ pub fn help_text(command: Option<&str>) -> String {
              \x20 sweep_all        Sweep entire balance to an address\n\
              \x20 show_transfers   Show transaction history\n\
              \x20 show_transfer    Look up a transaction by digest\n\
-             \x20 fee              Show current reference gas price\n\
              \x20 stake            Stake IOTA to a validator\n\
              \x20 unstake          Unstake a staked IOTA object\n\
              \x20 stakes           Show active stakes\n\
+             \x20 status           Show network status\n\
              \x20 faucet           Request testnet/devnet tokens\n\
              \x20 seed             Show seed phrase\n\
              \x20 help [cmd]       Show help for a command\n\
@@ -772,9 +780,15 @@ mod tests {
     }
 
     #[test]
-    fn parse_fee() {
-        assert_eq!(Command::parse("fee").unwrap(), Command::Fee);
-        assert_eq!(Command::parse("gas").unwrap(), Command::Fee);
+    fn parse_status() {
+        assert_eq!(
+            Command::parse("status").unwrap(),
+            Command::Status { node_url: None }
+        );
+        assert_eq!(
+            Command::parse("status https://example.com/graphql").unwrap(),
+            Command::Status { node_url: Some("https://example.com/graphql".to_string()) }
+        );
     }
 
     #[test]
