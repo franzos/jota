@@ -15,7 +15,6 @@ use std::sync::Arc;
 use zeroize::{Zeroize, Zeroizing};
 
 use iota_sdk::crypto::ed25519::Ed25519PrivateKey;
-use iota_sdk::crypto::FromMnemonic;
 use iota_sdk::types::{Address, ObjectId};
 use std::fmt;
 
@@ -43,6 +42,7 @@ struct WalletInfo {
     address_string: String,
     network_config: NetworkConfig,
     private_key: Arc<Ed25519PrivateKey>,
+    network_client: Arc<NetworkClient>,
     is_mainnet: bool,
 }
 
@@ -56,16 +56,16 @@ impl fmt::Debug for WalletInfo {
 }
 
 impl WalletInfo {
-    fn from_wallet(wallet: &Wallet) -> Self {
-        let private_key = Ed25519PrivateKey::from_mnemonic(wallet.mnemonic(), None, None)
-            .expect("wallet mnemonic already validated");
-        Self {
+    fn from_wallet(wallet: &Wallet) -> anyhow::Result<Self> {
+        let network_client = NetworkClient::new(wallet.network_config(), false)?;
+        Ok(Self {
             address: *wallet.address(),
             address_string: wallet.address().to_string(),
             network_config: wallet.network_config().clone(),
-            private_key: Arc::new(private_key),
+            private_key: Arc::new(wallet.private_key().clone()),
+            network_client: Arc::new(network_client),
             is_mainnet: wallet.is_mainnet(),
-        }
+        })
     }
 }
 
@@ -340,6 +340,9 @@ struct App {
     error_message: Option<String>,
     success_message: Option<String>,
     status_message: Option<String>,
+
+    // Cached theme (avoids re-allocating every frame)
+    theme: Theme,
 }
 
 impl App {
@@ -382,6 +385,14 @@ impl App {
             error_message: None,
             success_message: None,
             status_message: None,
+            theme: Theme::custom("IOTA".to_string(), Palette {
+                background: BG,
+                text: Color::from_rgb(0.988, 0.988, 0.988),
+                primary: PRIMARY,
+                success: Color::from_rgb(0.059, 0.757, 0.718),
+                warning: Color::from_rgb(1.0, 0.757, 0.027),
+                danger: Color::from_rgb(0.906, 0.192, 0.192),
+            }),
         };
         (app, Task::none())
     }
@@ -402,14 +413,7 @@ impl App {
     }
 
     fn theme(&self) -> Theme {
-        Theme::custom("IOTA".to_string(), Palette {
-            background: BG,
-            text: Color::from_rgb(0.988, 0.988, 0.988),   // #fcfcfc
-            primary: PRIMARY,
-            success: Color::from_rgb(0.059, 0.757, 0.718), // #0fc1b7 (main-green)
-            warning: Color::from_rgb(1.0, 0.757, 0.027),   // #ffc107
-            danger: Color::from_rgb(0.906, 0.192, 0.192),  // #e73131 (iota2-red-600)
-        })
+        self.theme.clone()
     }
 
     fn clear_form(&mut self) {
@@ -497,7 +501,7 @@ impl App {
                 Task::perform(
                     async move {
                         let wallet = Wallet::open(&path, &pw)?;
-                        Ok(WalletInfo::from_wallet(&wallet))
+                        WalletInfo::from_wallet(&wallet)
                     },
                     |r: Result<WalletInfo, anyhow::Error>| {
                         Message::WalletOpened(r.map_err(|e| e.to_string()))
@@ -545,7 +549,7 @@ impl App {
                         std::fs::create_dir_all(path.parent().unwrap())?;
                         let wallet = Wallet::create_new(path, &pw, config)?;
                         let mnemonic = Zeroizing::new(wallet.mnemonic().to_string());
-                        let info = WalletInfo::from_wallet(&wallet);
+                        let info = WalletInfo::from_wallet(&wallet)?;
                         Ok((info, mnemonic))
                     },
                     |r: Result<(WalletInfo, Zeroizing<String>), anyhow::Error>| {
@@ -605,7 +609,7 @@ impl App {
                         std::fs::create_dir_all(path.parent().unwrap())?;
                         let wallet =
                             Wallet::recover_from_mnemonic(path, &pw, &mnemonic, config)?;
-                        Ok(WalletInfo::from_wallet(&wallet))
+                        WalletInfo::from_wallet(&wallet)
                     },
                     |r: Result<WalletInfo, anyhow::Error>| {
                         Message::WalletRecovered(r.map_err(|e| e.to_string()))
@@ -648,14 +652,13 @@ impl App {
                     return Task::none();
                 };
                 let address = info.address;
-                let config = info.network_config.clone();
+                let net = info.network_client.clone();
                 self.loading = true;
                 self.error_message = None;
                 self.success_message = None;
 
                 Task::perform(
                     async move {
-                        let net = NetworkClient::new(&config, false)?;
                         net.faucet(&address).await?;
                         Ok(())
                     },
@@ -727,7 +730,7 @@ impl App {
                     }
                 };
                 let sender = info.address;
-                let config = info.network_config.clone();
+                let net = info.network_client.clone();
                 let pk = info.private_key.clone();
                 self.loading = true;
                 self.error_message = None;
@@ -736,7 +739,6 @@ impl App {
                     async move {
                         let recipient = Address::from_hex(&recipient_str)
                             .map_err(|e| anyhow::anyhow!("Invalid recipient address: {e}"))?;
-                        let net = NetworkClient::new(&config, false)?;
                         let result = net.send_iota(&pk, &sender, recipient, amount).await?;
                         Ok(result.digest)
                     },
@@ -832,7 +834,7 @@ impl App {
                     }
                 };
                 let sender = info.address;
-                let config = info.network_config.clone();
+                let net = info.network_client.clone();
                 let pk = info.private_key.clone();
                 self.loading = true;
                 self.error_message = None;
@@ -841,7 +843,6 @@ impl App {
                     async move {
                         let validator = Address::from_hex(&validator_str)
                             .map_err(|e| anyhow::anyhow!("Invalid validator address: {e}"))?;
-                        let net = NetworkClient::new(&config, false)?;
                         let result = net.stake_iota(&pk, &sender, validator, amount).await?;
                         Ok(result.digest)
                     },
@@ -870,7 +871,7 @@ impl App {
                     return Task::none();
                 };
                 let sender = info.address;
-                let config = info.network_config.clone();
+                let net = info.network_client.clone();
                 let pk = info.private_key.clone();
                 self.loading = true;
                 self.error_message = None;
@@ -880,7 +881,6 @@ impl App {
                     async move {
                         let object_id = ObjectId::from_hex(&object_id_str)
                             .map_err(|e| anyhow::anyhow!("Invalid object ID: {e}"))?;
-                        let net = NetworkClient::new(&config, false)?;
                         let result = net.unstake_iota(&pk, &sender, object_id).await?;
                         Ok(result.digest)
                     },
@@ -918,8 +918,15 @@ impl App {
                 };
                 self.network_config = config.clone();
                 if let Some(info) = &mut self.wallet_info {
-                    info.network_config = config;
+                    info.network_config = config.clone();
                     info.is_mainnet = network == Network::Mainnet;
+                    match NetworkClient::new(&config, false) {
+                        Ok(client) => info.network_client = Arc::new(client),
+                        Err(e) => {
+                            self.error_message = Some(format!("Failed to switch network: {e}"));
+                            return Task::none();
+                        }
+                    }
                     return self.refresh_dashboard();
                 }
                 Task::none()
@@ -1030,15 +1037,15 @@ impl App {
         self.history_page = 0;
 
         let addr1 = info.address;
-        let cfg1 = info.network_config.clone();
+        let net1 = info.network_client.clone();
         let addr2 = info.address;
-        let cfg2 = info.network_config.clone();
+        let net2 = info.network_client.clone();
+        let network = info.network_config.network;
 
         Task::batch([
             Task::perform(
                 async move {
-                    let net = NetworkClient::new(&cfg1, false)?;
-                    net.balance(&addr1).await
+                    net1.balance(&addr1).await
                 },
                 |r: Result<u64, anyhow::Error>| {
                     Message::BalanceUpdated(r.map_err(|e| e.to_string()))
@@ -1046,11 +1053,10 @@ impl App {
             ),
             Task::perform(
                 async move {
-                    let net = NetworkClient::new(&cfg2, false)?;
-                    net.sync_transactions(&addr2).await?;
-                    // Cache ops are sync — no await, no Send issue
+                    net2.sync_transactions(&addr2).await?;
+                    // Cache ops are sync -- no await, no Send issue
                     let cache = TransactionCache::open()?;
-                    let network_str = cfg2.network.to_string();
+                    let network_str = network.to_string();
                     let address_str = addr2.to_string();
                     let page = cache.query(&network_str, &address_str, &TransactionFilter::All, 25, 0)?;
                     let deltas = cache.query_epoch_deltas(&network_str, &address_str)?;
@@ -1089,11 +1095,10 @@ impl App {
         };
         self.loading = true;
         let addr = info.address;
-        let config = info.network_config.clone();
+        let net = info.network_client.clone();
 
         Task::perform(
             async move {
-                let net = NetworkClient::new(&config, false)?;
                 net.get_stakes(&addr).await
             },
             |r: Result<Vec<StakedIotaSummary>, anyhow::Error>| {
