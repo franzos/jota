@@ -1,7 +1,7 @@
 /// Output formatting — IOTA denomination conversion and display helpers.
 ///
 /// IOTA uses 9 decimal places (nanos). 1 IOTA = 1_000_000_000 nanos.
-use crate::network::{NetworkStatus, StakeStatus, StakedIotaSummary, TransactionDetailsSummary, TransactionDirection, TransactionSummary};
+use crate::network::{NetworkStatus, StakeStatus, StakedIotaSummary, TokenBalance, TransactionDetailsSummary, TransactionDirection, TransactionSummary};
 
 const NANOS_PER_IOTA: u64 = 1_000_000_000;
 
@@ -163,6 +163,31 @@ pub fn format_transaction_details(tx: &TransactionDetailsSummary) -> String {
     }
     if let Some(fee) = tx.fee {
         lines.push(format!("  Gas fee:   {}", format_balance(fee)));
+    }
+    lines.join("\n")
+}
+
+/// Format token balances for display.
+#[must_use]
+pub fn format_token_balances(balances: &[TokenBalance]) -> String {
+    if balances.is_empty() {
+        return "No token balances found.".to_string();
+    }
+
+    let mut lines = Vec::with_capacity(balances.len());
+    for b in balances {
+        // For native IOTA (9 decimals), show in IOTA units; for others show raw amount
+        let amount = if b.coin_type == "0x2::iota::IOTA" {
+            format!("{} IOTA", nanos_to_iota(b.total_balance as u64))
+        } else {
+            b.total_balance.to_string()
+        };
+        let objects = if b.coin_object_count == 1 {
+            "1 object".to_string()
+        } else {
+            format!("{} objects", b.coin_object_count)
+        };
+        lines.push(format!("  {}  {}  ({})", b.coin_type, amount, objects));
     }
     lines.join("\n")
 }

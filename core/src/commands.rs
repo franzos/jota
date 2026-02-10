@@ -28,6 +28,8 @@ pub enum Command {
     Unstake { staked_object_id: ObjectId },
     /// Show all active stakes
     Stakes,
+    /// Show non-native token balances
+    Tokens,
     /// Show network status: status [node_url]
     Status { node_url: Option<String> },
     /// Show seed phrase (mnemonic)
@@ -158,6 +160,8 @@ impl Command {
             }
 
             "stakes" => Ok(Command::Stakes),
+
+            "tokens" | "token_balances" => Ok(Command::Tokens),
 
             "status" => Ok(Command::Status {
                 node_url: arg1.map(|s| s.to_string()),
@@ -404,6 +408,25 @@ impl Command {
                 }
             }
 
+            Command::Tokens => {
+                let balances = network.get_token_balances(wallet.address()).await?;
+                if json_output {
+                    let json_balances: Vec<serde_json::Value> = balances
+                        .iter()
+                        .map(|b| {
+                            serde_json::json!({
+                                "coin_type": b.coin_type,
+                                "coin_object_count": b.coin_object_count,
+                                "total_balance": b.total_balance.to_string(),
+                            })
+                        })
+                        .collect();
+                    Ok(serde_json::to_string_pretty(&json_balances)?)
+                } else {
+                    Ok(display::format_token_balances(&balances))
+                }
+            }
+
             Command::Status { node_url } => {
                 let status = match node_url {
                     Some(url) => NetworkClient::new_custom(url)?.status().await?,
@@ -490,6 +513,9 @@ pub fn help_text(command: Option<&str>) -> String {
         Some("stakes") => {
             "stakes\n  Show all active stakes for this wallet.".to_string()
         }
+        Some("tokens") | Some("token_balances") => {
+            "tokens\n  Show all coin/token balances for this wallet.\n  Alias: token_balances".to_string()
+        }
         Some("status") => {
             "status [node_url]\n  Show current epoch, gas price, network, and node URL.\n  Optionally query a different node.".to_string()
         }
@@ -515,6 +541,7 @@ pub fn help_text(command: Option<&str>) -> String {
              \x20 stake            Stake IOTA to a validator\n\
              \x20 unstake          Unstake a staked IOTA object\n\
              \x20 stakes           Show active stakes\n\
+             \x20 tokens           Show token balances\n\
              \x20 status           Show network status\n\
              \x20 faucet           Request testnet/devnet tokens\n\
              \x20 seed             Show seed phrase\n\
@@ -789,6 +816,12 @@ mod tests {
             Command::parse("status https://example.com/graphql").unwrap(),
             Command::Status { node_url: Some("https://example.com/graphql".to_string()) }
         );
+    }
+
+    #[test]
+    fn parse_tokens() {
+        assert_eq!(Command::parse("tokens").unwrap(), Command::Tokens);
+        assert_eq!(Command::parse("token_balances").unwrap(), Command::Tokens);
     }
 
     #[test]

@@ -482,6 +482,68 @@ impl NetworkClient {
         })
     }
 
+    /// Query all coin type balances for an address.
+    pub async fn get_token_balances(&self, address: &Address) -> Result<Vec<TokenBalance>> {
+        let query = serde_json::json!({
+            "query": r#"query ($owner: IotaAddress!) {
+                address(address: $owner) {
+                    balances {
+                        nodes {
+                            coinType { repr }
+                            coinObjectCount
+                            totalBalance
+                        }
+                    }
+                }
+            }"#,
+            "variables": {
+                "owner": address.to_string()
+            }
+        });
+
+        let response = self
+            .client
+            .run_query_from_json(query.as_object().unwrap().clone())
+            .await
+            .context("Failed to query token balances")?;
+
+        let data = response.data.context("No data in balances response")?;
+        let nodes = data
+            .get("address")
+            .and_then(|a| a.get("balances"))
+            .and_then(|b| b.get("nodes"))
+            .and_then(|n| n.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        let mut balances = Vec::new();
+        for node in &nodes {
+            let coin_type = node
+                .get("coinType")
+                .and_then(|v| v.get("repr"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string();
+            let coin_object_count = node
+                .get("coinObjectCount")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let total_balance = node
+                .get("totalBalance")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse::<u128>().ok())
+                .unwrap_or(0);
+
+            balances.push(TokenBalance {
+                coin_type,
+                coin_object_count,
+                total_balance,
+            });
+        }
+
+        Ok(balances)
+    }
+
     /// Query network status: current epoch, gas price, and node URL.
     pub async fn status(&self) -> Result<NetworkStatus> {
         let epoch = self
@@ -546,6 +608,13 @@ pub struct StakedIotaSummary {
     pub stake_activation_epoch: u64,
     pub estimated_reward: Option<u64>,
     pub status: StakeStatus,
+}
+
+#[derive(Debug, Clone)]
+pub struct TokenBalance {
+    pub coin_type: String,
+    pub coin_object_count: u64,
+    pub total_balance: u128,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
