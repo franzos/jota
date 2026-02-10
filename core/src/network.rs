@@ -296,9 +296,10 @@ impl NetworkClient {
         ).await?;
 
         // Merge: sent takes priority (a tx you signed is "out" even if you also received change)
+        let seen: HashSet<String> = sent.iter().map(|t| t.digest.clone()).collect();
         let mut all = sent;
         for tx in recv {
-            if !all.iter().any(|t| t.digest == tx.digest) {
+            if !seen.contains(&tx.digest) {
                 all.push(tx);
             }
         }
