@@ -468,7 +468,7 @@ impl App {
 
                 Task::perform(
                     async move {
-                        let net = NetworkClient::new(&config)?;
+                        let net = NetworkClient::new(&config, false)?;
                         net.faucet(&address).await?;
                         Ok(())
                     },
@@ -541,7 +541,7 @@ impl App {
                             .map_err(|e| anyhow::anyhow!("Invalid recipient address: {e}"))?;
                         let pk = Ed25519PrivateKey::from_mnemonic(&mnemonic, None, None)
                             .map_err(|e| anyhow::anyhow!("Failed to derive key: {e}"))?;
-                        let net = NetworkClient::new(&config)?;
+                        let net = NetworkClient::new(&config, false)?;
                         let result = net.send_iota(&pk, &sender, recipient, amount).await?;
                         Ok(result.digest)
                     },
@@ -634,7 +634,7 @@ impl App {
                             .map_err(|e| anyhow::anyhow!("Invalid validator address: {e}"))?;
                         let pk = Ed25519PrivateKey::from_mnemonic(&mnemonic, None, None)
                             .map_err(|e| anyhow::anyhow!("Failed to derive key: {e}"))?;
-                        let net = NetworkClient::new(&config)?;
+                        let net = NetworkClient::new(&config, false)?;
                         let result = net.stake_iota(&pk, &sender, validator, amount).await?;
                         Ok(result.digest)
                     },
@@ -675,7 +675,7 @@ impl App {
                             .map_err(|e| anyhow::anyhow!("Invalid object ID: {e}"))?;
                         let pk = Ed25519PrivateKey::from_mnemonic(&mnemonic, None, None)
                             .map_err(|e| anyhow::anyhow!("Failed to derive key: {e}"))?;
-                        let net = NetworkClient::new(&config)?;
+                        let net = NetworkClient::new(&config, false)?;
                         let result = net.unstake_iota(&pk, &sender, object_id).await?;
                         Ok(result.digest)
                     },
@@ -810,7 +810,7 @@ impl App {
         Task::batch([
             Task::perform(
                 async move {
-                    let net = NetworkClient::new(&cfg1)?;
+                    let net = NetworkClient::new(&cfg1, false)?;
                     net.balance(&addr1).await
                 },
                 |r: Result<u64, anyhow::Error>| {
@@ -819,7 +819,7 @@ impl App {
             ),
             Task::perform(
                 async move {
-                    let net = NetworkClient::new(&cfg2)?;
+                    let net = NetworkClient::new(&cfg2, false)?;
                     net.transactions(&addr2, TransactionFilter::All).await
                 },
                 |r: Result<Vec<TransactionSummary>, anyhow::Error>| {
@@ -839,7 +839,7 @@ impl App {
 
         Task::perform(
             async move {
-                let net = NetworkClient::new(&config)?;
+                let net = NetworkClient::new(&config, false)?;
                 net.get_stakes(&addr).await
             },
             |r: Result<Vec<StakedIotaSummary>, anyhow::Error>| {

@@ -216,6 +216,7 @@ impl Command {
         wallet: &Wallet,
         network: &NetworkClient,
         json_output: bool,
+        allow_insecure: bool,
     ) -> Result<String> {
         match self {
             Command::Balance => {
@@ -434,7 +435,7 @@ impl Command {
 
             Command::Status { node_url } => {
                 let status = match node_url {
-                    Some(url) => NetworkClient::new_custom(url)?.status().await?,
+                    Some(url) => NetworkClient::new_custom(url, allow_insecure)?.status().await?,
                     None => network.status().await?,
                 };
                 if json_output {

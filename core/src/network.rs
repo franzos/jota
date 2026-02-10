@@ -21,8 +21,22 @@ pub struct NetworkClient {
     node_url: String,
 }
 
+/// Reject non-HTTPS node URLs unless `allow_insecure` is set.
+fn validate_node_url(url: &str, allow_insecure: bool) -> Result<()> {
+    if url.starts_with("https://") {
+        return Ok(());
+    }
+    if url.starts_with("http://") {
+        if allow_insecure {
+            return Ok(());
+        }
+        bail!("Refusing to connect over plain HTTP: {url}\nUse --insecure to allow unencrypted connections.");
+    }
+    bail!("Invalid node URL scheme: {url}\nExpected an https:// URL.");
+}
+
 impl NetworkClient {
-    pub fn new(config: &NetworkConfig) -> Result<Self> {
+    pub fn new(config: &NetworkConfig, allow_insecure: bool) -> Result<Self> {
         let (client, node_url) = match &config.network {
             Network::Testnet => (Client::new_testnet(), "https://graphql.testnet.iota.cafe".to_string()),
             Network::Mainnet => (Client::new_mainnet(), "https://graphql.mainnet.iota.cafe".to_string()),
@@ -32,6 +46,7 @@ impl NetworkClient {
                     .custom_url
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("Custom network requires a node URL"))?;
+                validate_node_url(url, allow_insecure)?;
                 let c = Client::new(url)
                     .context("Failed to create client with custom URL")?;
                 (c, url.clone())
@@ -46,7 +61,8 @@ impl NetworkClient {
     }
 
     /// Create a client pointed at an arbitrary GraphQL endpoint.
-    pub fn new_custom(url: &str) -> Result<Self> {
+    pub fn new_custom(url: &str, allow_insecure: bool) -> Result<Self> {
+        validate_node_url(url, allow_insecure)?;
         let client = Client::new(url)
             .context("Failed to create client with custom URL")?;
         Ok(Self {
@@ -684,12 +700,47 @@ mod tests {
             custom_url: None,
         };
 
-        let result = NetworkClient::new(&config);
+        let result = NetworkClient::new(&config, false);
         assert!(result.is_err(), "Custom network without URL should fail");
         let err = result.err().expect("already checked is_err").to_string();
         assert!(
             err.contains("Custom network requires a node URL"),
             "error should mention missing URL, got: {err}"
         );
+    }
+
+    #[test]
+    fn rejects_http_url_without_insecure() {
+        let config = NetworkConfig {
+            network: Network::Custom,
+            custom_url: Some("http://localhost:9125/graphql".to_string()),
+        };
+        let err = NetworkClient::new(&config, false).err().expect("should fail");
+        assert!(err.to_string().contains("--insecure"));
+    }
+
+    #[test]
+    fn accepts_http_url_with_insecure() {
+        let config = NetworkConfig {
+            network: Network::Custom,
+            custom_url: Some("http://localhost:9125/graphql".to_string()),
+        };
+        // Should pass URL validation (may fail on connection, which is fine)
+        if let Err(e) = NetworkClient::new(&config, true) {
+            assert!(
+                !e.to_string().contains("--insecure"),
+                "should not reject due to HTTP scheme when --insecure is set"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_url_scheme() {
+        let config = NetworkConfig {
+            network: Network::Custom,
+            custom_url: Some("ftp://example.com/graphql".to_string()),
+        };
+        let err = NetworkClient::new(&config, false).err().expect("should fail");
+        assert!(err.to_string().contains("Invalid node URL scheme"));
     }
 }

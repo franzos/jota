@@ -32,7 +32,7 @@ async fn testnet_query_balance() {
     let password = b"integration-test";
     let config = testnet_config();
 
-    let network = NetworkClient::new(&config).expect("failed to create testnet client");
+    let network = NetworkClient::new(&config, false).expect("failed to create testnet client");
     let wallet = Wallet::create_new(path, password, config).expect("failed to create wallet");
 
     // A fresh wallet should have zero balance
@@ -51,7 +51,7 @@ async fn testnet_query_transactions_empty() {
     let password = b"integration-test";
     let config = testnet_config();
 
-    let network = NetworkClient::new(&config).expect("failed to create testnet client");
+    let network = NetworkClient::new(&config, false).expect("failed to create testnet client");
     let wallet = Wallet::create_new(path, password, config).expect("failed to create wallet");
 
     let txs = network
@@ -69,7 +69,7 @@ async fn devnet_faucet_and_balance() {
     let password = b"integration-test";
     let config = devnet_config();
 
-    let network = NetworkClient::new(&config).expect("failed to create devnet client");
+    let network = NetworkClient::new(&config, false).expect("failed to create devnet client");
     let wallet = Wallet::create_new(path, password, config).expect("failed to create wallet");
 
     // Request faucet tokens
@@ -98,7 +98,7 @@ async fn devnet_send_iota() {
     let password = b"integration-test";
     let config = devnet_config();
 
-    let network = NetworkClient::new(&config).expect("failed to create devnet client");
+    let network = NetworkClient::new(&config, false).expect("failed to create devnet client");
     let sender = Wallet::create_new(sender_path, password, config.clone())
         .expect("failed to create sender wallet");
     let recipient = Wallet::create_new(recipient_path, password, config)
@@ -142,23 +142,23 @@ async fn devnet_send_iota() {
 #[ignore]
 async fn testnet_client_creation() {
     // Verify we can create clients for each network type
-    let testnet = NetworkClient::new(&testnet_config());
+    let testnet = NetworkClient::new(&testnet_config(), false);
     assert!(testnet.is_ok(), "testnet client creation should succeed");
 
-    let devnet = NetworkClient::new(&devnet_config());
+    let devnet = NetworkClient::new(&devnet_config(), false);
     assert!(devnet.is_ok(), "devnet client creation should succeed");
 
     let mainnet = NetworkClient::new(&NetworkConfig {
         network: Network::Mainnet,
         custom_url: None,
-    });
+    }, false);
     assert!(mainnet.is_ok(), "mainnet client creation should succeed");
 
     // Custom without URL should fail
     let custom_no_url = NetworkClient::new(&NetworkConfig {
         network: Network::Custom,
         custom_url: None,
-    });
+    }, false);
     assert!(custom_no_url.is_err(), "custom without URL should fail");
 }
 
@@ -197,7 +197,7 @@ async fn devnet_send_insufficient_balance() {
     let password = b"integration-test";
     let config = devnet_config();
 
-    let network = NetworkClient::new(&config).expect("failed to create devnet client");
+    let network = NetworkClient::new(&config, false).expect("failed to create devnet client");
     let sender = Wallet::create_new(sender_path, password, config)
         .expect("failed to create sender wallet");
 
@@ -225,7 +225,7 @@ async fn devnet_send_to_self() {
     let password = b"integration-test";
     let config = devnet_config();
 
-    let network = NetworkClient::new(&config).expect("failed to create devnet client");
+    let network = NetworkClient::new(&config, false).expect("failed to create devnet client");
     let wallet = Wallet::create_new(path, password, config)
         .expect("failed to create wallet");
 
@@ -286,7 +286,7 @@ async fn devnet_faucet_twice() {
     let password = b"integration-test";
     let config = devnet_config();
 
-    let network = NetworkClient::new(&config).expect("failed to create devnet client");
+    let network = NetworkClient::new(&config, false).expect("failed to create devnet client");
     let wallet = Wallet::create_new(path, password, config)
         .expect("failed to create wallet");
 
@@ -332,7 +332,7 @@ async fn devnet_transaction_history_after_send() {
     let password = b"integration-test";
     let config = devnet_config();
 
-    let network = NetworkClient::new(&config).expect("failed to create devnet client");
+    let network = NetworkClient::new(&config, false).expect("failed to create devnet client");
     let sender = Wallet::create_new(sender_path, password, config.clone())
         .expect("failed to create sender wallet");
     let recipient = Wallet::create_new(recipient_path, password, config)
@@ -378,7 +378,7 @@ async fn devnet_transaction_history_after_send() {
 #[ignore]
 async fn testnet_balance_known_address() {
     let config = testnet_config();
-    let network = NetworkClient::new(&config).expect("failed to create testnet client");
+    let network = NetworkClient::new(&config, false).expect("failed to create testnet client");
 
     // Query balance of the zero address — just verify the query succeeds.
     // The zero address may have funds from various test activities.
