@@ -30,10 +30,11 @@ impl TransactionPage {
     }
 }
 
-/// Default DB location: `~/.local/share/iota-wallet/transactions.db`
+/// Default DB location: platform data directory + `iota-wallet/transactions.db`
+/// (Linux: `~/.local/share`, macOS: `~/Library/Application Support`)
 fn default_db_path() -> Result<PathBuf> {
     let data_dir = dirs::data_dir()
-        .context("Cannot determine data directory ($XDG_DATA_HOME or ~/.local/share)")?;
+        .context("Cannot determine data directory")?;
     Ok(data_dir.join("iota-wallet").join("transactions.db"))
 }
 
