@@ -6,12 +6,6 @@ A Monero-inspired wallet for IOTA Rebased. Supports interactive mode, one-shot c
 
 ## Install
 
-**From source:**
-
-```bash
-cargo install --git https://github.com/franzos/iota-wallet
-```
-
 **Pre-built binaries:**
 
 Download the latest release from [GitHub Releases](https://github.com/franzos/iota-wallet/releases):
