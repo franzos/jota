@@ -1,0 +1,10 @@
+mod account;
+mod create;
+mod history;
+mod open;
+mod receive;
+mod recover;
+mod send;
+mod settings;
+mod staking;
+mod welcome;
