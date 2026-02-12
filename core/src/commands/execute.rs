@@ -437,6 +437,34 @@ impl Command {
                 }
             }
 
+            Command::Notarize { message } => {
+                let result = service.notarize(message, None).await?;
+                let network_query = match service.network_name() {
+                    "mainnet" => "",
+                    "testnet" => "?network=testnet",
+                    "devnet" => "?network=devnet",
+                    _ => "?network=testnet",
+                };
+                let explorer_url = format!(
+                    "https://explorer.iota.org/txblock/{}{}",
+                    result.digest, network_query,
+                );
+                if json_output {
+                    Ok(serde_json::json!({
+                        "digest": result.digest,
+                        "status": result.status,
+                        "message": message,
+                        "explorer_url": explorer_url,
+                    })
+                    .to_string())
+                } else {
+                    Ok(format!(
+                        "Notarized!\n  Digest:    {}\n  Status:    {}\n  Explorer:  {}",
+                        result.digest, result.status, explorer_url,
+                    ))
+                }
+            }
+
             Command::VerifyMessage { message, signature, public_key } => {
                 let valid = crate::signer::verify_message(
                     message.as_bytes(),

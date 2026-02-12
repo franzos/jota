@@ -167,6 +167,15 @@ impl Command {
                 Ok(Command::SignMessage { message })
             }
 
+            "notarize" => {
+                let message = match (arg1, arg2) {
+                    (Some(a), Some(b)) => format!("{a} {b}"),
+                    (Some(a), None) => a.to_string(),
+                    _ => bail!("Missing message. Usage: notarize <message>"),
+                };
+                Ok(Command::Notarize { message })
+            }
+
             "verify_message" | "verify" => {
                 // Re-split with 4 parts: cmd, message, signature, public_key
                 let mut parts = input.splitn(4, char::is_whitespace);
@@ -608,6 +617,29 @@ mod tests {
         assert!(Command::parse("verify").is_err());
         assert!(Command::parse("verify hello").is_err());
         assert!(Command::parse("verify hello sig").is_err());
+    }
+
+    #[test]
+    fn parse_notarize() {
+        let cmd = Command::parse("notarize hello world").unwrap();
+        match cmd {
+            Command::Notarize { message } => assert_eq!(message, "hello world"),
+            other => panic!("expected Notarize, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_notarize_single_word() {
+        let cmd = Command::parse("notarize test").unwrap();
+        match cmd {
+            Command::Notarize { message } => assert_eq!(message, "test"),
+            other => panic!("expected Notarize, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_notarize_missing_message() {
+        assert!(Command::parse("notarize").is_err());
     }
 
     #[test]

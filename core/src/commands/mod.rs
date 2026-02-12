@@ -8,6 +8,16 @@ pub use help::help_text;
 use iota_sdk::types::{Digest, ObjectId};
 
 use crate::display;
+
+/// UTF-8 safe string truncation for confirmation prompts.
+fn truncate_preview(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(max_chars).collect();
+        format!("{truncated}...")
+    }
+}
 use crate::network::TransactionFilter;
 use crate::recipient::{Recipient, ResolvedRecipient};
 
@@ -52,6 +62,8 @@ pub enum Command {
     SignMessage { message: String },
     /// Verify a signed message: verify <message> <signature_b64> <public_key_b64>
     VerifyMessage { message: String, signature: String, public_key: String },
+    /// Notarize a message on-chain: notarize <message>
+    Notarize { message: String },
     /// Change wallet password
     Password,
     /// Print help
@@ -105,12 +117,14 @@ impl Command {
                 display_recipient(validator),
             )),
             Command::SignMessage { message } => {
-                let preview = if message.len() > 40 {
-                    format!("{}...", &message[..40])
-                } else {
-                    message.clone()
-                };
+                let preview = truncate_preview(message, 40);
                 Some(format!("Sign message \"{preview}\" with your private key?"))
+            }
+            Command::Notarize { message } => {
+                let preview = truncate_preview(message, 40);
+                Some(format!(
+                    "Notarize \"{preview}\" on-chain? This is permanent, publicly visible, and costs gas."
+                ))
             }
             Command::Seed => Some("This will display sensitive data. Continue?".to_string()),
             Command::Password => Some("Change wallet password?".to_string()),

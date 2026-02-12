@@ -7,6 +7,7 @@ use iota_wallet_core::network::NetworkClient;
 use iota_wallet_core::service::WalletService;
 use iota_wallet_core::validate_wallet_name;
 use iota_wallet_core::wallet::{Network, NetworkConfig, Wallet};
+use iota_wallet_core::ObjectId;
 use std::path::PathBuf;
 use std::sync::Arc;
 use zeroize::Zeroizing;
@@ -57,6 +58,10 @@ pub(crate) struct Cli {
     /// Account index to use (default: stored in wallet, initially 0)
     #[arg(long)]
     account: Option<u64>,
+
+    /// On-chain notarization package ID (or set IOTA_NOTARIZATION_PKG_ID)
+    #[arg(long, env = "IOTA_NOTARIZATION_PKG_ID")]
+    notarization_package: Option<String>,
 }
 
 impl Cli {
@@ -116,6 +121,17 @@ impl Cli {
             );
         }
         Ok(())
+    }
+
+    fn notarization_package_id(&self) -> Result<Option<ObjectId>> {
+        match &self.notarization_package {
+            Some(s) => {
+                let id = ObjectId::from_hex(s)
+                    .map_err(|e| anyhow::anyhow!("Invalid notarization package ID '{s}': {e}"))?;
+                Ok(Some(id))
+            }
+            None => Ok(None),
+        }
     }
 
     /// Resolve the effective network config, preferring explicit CLI flags over
@@ -189,11 +205,13 @@ async fn run_oneshot(cli: &Cli, cmd_str: &str) -> Result<()> {
     }
     let effective_config = cli.resolve_network_config(wallet.network_config());
     let network = NetworkClient::new(&effective_config, cli.insecure)?;
+    let notarization_pkg = cli.notarization_package_id()?;
     let service = WalletService::new(
         network,
         Arc::new(wallet.signer()),
         effective_config.network.to_string(),
-    );
+    )
+    .with_notarization_package(notarization_pkg);
 
     let command = Command::parse(cmd_str)?;
     if command == Command::Exit {

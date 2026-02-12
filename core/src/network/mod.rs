@@ -1,10 +1,12 @@
 /// Thin wrapper around the SDK's GraphQL client for network operations.
 mod history;
 mod names;
+mod notarize;
 mod staking;
 mod transfer;
 mod types;
 
+pub use notarize::TESTNET_NOTARIZATION_PACKAGE;
 pub use types::*;
 
 use anyhow::{Context, Result, bail};

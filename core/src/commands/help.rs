@@ -46,6 +46,9 @@ pub fn help_text(command: Option<&str>) -> String {
         Some("password") | Some("passwd") => {
             "password\n  Change the wallet's encryption password.\n  Alias: passwd".to_string()
         }
+        Some("notarize") => {
+            "notarize <message>\n  Create a locked notarization on-chain.\n  Posts a timestamped record via the IOTA notarization Move module.\n  Requires --notarization-package or IOTA_NOTARIZATION_PKG_ID.".to_string()
+        }
         Some("sign_message") | Some("sign") => {
             "sign_message <message>\n  Sign a message with the wallet's private key.\n  Returns base64-encoded signature and public key.\n  Alias: sign".to_string()
         }
@@ -73,6 +76,7 @@ pub fn help_text(command: Option<&str>) -> String {
              \x20 faucet           Request testnet/devnet tokens\n\
              \x20 sign_message      Sign a message with your key\n\
              \x20 verify            Verify a signed message\n\
+             \x20 notarize          Notarize a message on-chain\n\
              \x20 seed             Show seed phrase\n\
              \x20 account          Show or switch account\n\
              \x20 password         Change wallet password\n\

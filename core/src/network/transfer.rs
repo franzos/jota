@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, bail};
+use iota_sdk::graphql_client::WaitForTx;
 use iota_sdk::graphql_client::pagination::PaginationFilter;
 use iota_sdk::transaction_builder::TransactionBuilder;
 use iota_sdk::transaction_builder::unresolved::Argument as UnresolvedArg;
@@ -31,16 +32,18 @@ impl NetworkClient {
 
         let effects = self
             .client
-            .execute_tx(&[signature], tx, None)
+            .execute_tx(&[signature], tx, WaitForTx::Indexed)
             .await
             .context("Failed to execute transaction")?;
 
+        let tx_digest = effects.as_v1().transaction_digest;
+
         if let Some(error) = effects.status().error() {
-            bail!("Transaction failed: {error:?} (digest: {})", effects.digest());
+            bail!("Transaction failed: {error:?} (digest: {tx_digest})");
         }
 
         Ok(TransferResult {
-            digest: effects.digest().to_string(),
+            digest: tx_digest.to_string(),
             status: format!("{:?}", effects.status()),
             net_gas_usage: effects.gas_summary().net_gas_usage(),
         })

@@ -675,6 +675,7 @@ impl App {
                 self.sign_mode = mode;
                 self.signed_result = None;
                 self.verify_result = None;
+                self.notarize_result = None;
                 self.error_message = None;
                 self.success_message = None;
                 Task::none()
@@ -777,6 +778,50 @@ impl App {
                 Task::none()
             }
 
+            Message::NotarizeDescriptionChanged(v) => {
+                self.notarize_description = v;
+                Task::none()
+            }
+            Message::ConfirmNotarize => {
+                let Some(info) = &self.wallet_info else {
+                    return Task::none();
+                };
+                if self.sign_message_input.is_empty() {
+                    self.error_message = Some("Message is required".into());
+                    return Task::none();
+                }
+                let service = info.service.clone();
+                let msg = self.sign_message_input.clone();
+                let desc = if self.notarize_description.is_empty() {
+                    None
+                } else {
+                    Some(self.notarize_description.clone())
+                };
+                self.loading += 1;
+                self.error_message = None;
+
+                Task::perform(
+                    async move {
+                        let result = service.notarize(&msg, desc.as_deref()).await?;
+                        Ok(result.digest)
+                    },
+                    |r: Result<String, anyhow::Error>| {
+                        Message::NotarizeCompleted(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+            Message::NotarizeCompleted(result) => {
+                self.loading = self.loading.saturating_sub(1);
+                match result {
+                    Ok(digest) => {
+                        self.notarize_result = Some(digest);
+                        self.success_message = Some("Notarized on-chain".into());
+                    }
+                    Err(e) => self.error_message = Some(e),
+                }
+                Task::none()
+            }
+
             Message::NetworkChanged(network) => {
                 let config = NetworkConfig {
                     network,
@@ -798,11 +843,13 @@ impl App {
                     match NetworkClient::new(&config, false) {
                         Ok(client) => {
                             let signer = info.service.signer().clone();
-                            info.service = Arc::new(WalletService::new(
+                            let service = WalletService::new(
                                 client,
                                 signer,
                                 network.to_string(),
-                            ));
+                            ).with_notarization_package(info.notarization_package_config);
+                            info.notarization_package = service.notarization_package();
+                            info.service = Arc::new(service);
                         }
                         Err(e) => {
                             self.error_message = Some(format!("Failed to switch network: {e}"));
@@ -900,6 +947,8 @@ impl App {
         self.verify_signature_input.clear();
         self.verify_public_key_input.clear();
         self.verify_result = None;
+        self.notarize_description.clear();
+        self.notarize_result = None;
         self.settings_old_password.zeroize();
         self.settings_new_password.zeroize();
         self.settings_new_password_confirm.zeroize();

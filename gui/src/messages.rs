@@ -75,7 +75,7 @@ pub(crate) enum Message {
     AccountIndexChanged(u64),
     AccountSwitched(Result<WalletInfo, String>),
 
-    // Sign / Verify
+    // Sign / Verify / Notarize
     SignMessageInputChanged(String),
     SignModeChanged(SignMode),
     ConfirmSign,
@@ -87,6 +87,9 @@ pub(crate) enum Message {
     VerifyPublicKeyInputChanged(String),
     ConfirmVerify,
     VerifyCompleted(Result<bool, String>),
+    NotarizeDescriptionChanged(String),
+    ConfirmNotarize,
+    NotarizeCompleted(Result<String, String>),
 
     // Settings
     NetworkChanged(Network),

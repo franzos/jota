@@ -93,11 +93,13 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
 
     let effective_config = cli.resolve_network_config(wallet.network_config());
     let network = NetworkClient::new(&effective_config, cli.insecure)?;
+    let notarization_pkg = cli.notarization_package_id()?;
     let mut service = WalletService::new(
         network,
         Arc::new(wallet.signer()),
         effective_config.network.to_string(),
-    );
+    )
+    .with_notarization_package(notarization_pkg);
 
     println!(
         "Wallet ready. Address: {}",
@@ -123,6 +125,7 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
         "stake".into(), "unstake".into(), "stakes".into(),
         "sign_message".into(), "sign".into(),
         "verify_message".into(), "verify".into(),
+        "notarize".into(),
         "tokens".into(), "token_balances".into(),
         "status".into(),
         "faucet".into(),
@@ -160,7 +163,8 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                                     network,
                                     Arc::new(wallet.signer()),
                                     effective_config.network.to_string(),
-                                );
+                                )
+                                .with_notarization_package(notarization_pkg);
                                 let prompt_str = format!("[wallet {}]", wallet.short_address());
                                 prompt = DefaultPrompt::new(
                                     DefaultPromptSegment::Basic(prompt_str),

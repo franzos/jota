@@ -81,7 +81,7 @@ struct App {
     validator_address: String,
     stake_amount: String,
 
-    // Sign / Verify
+    // Sign / Verify / Notarize
     sign_message_input: String,
     sign_mode: SignMode,
     signed_result: Option<SignedMessage>,
@@ -89,6 +89,8 @@ struct App {
     verify_signature_input: String,
     verify_public_key_input: String,
     verify_result: Option<bool>,
+    notarize_description: String,
+    notarize_result: Option<String>,
 
     // Settings — password change
     settings_old_password: Zeroizing<String>,
@@ -232,6 +234,8 @@ impl App {
             verify_signature_input: String::new(),
             verify_public_key_input: String::new(),
             verify_result: None,
+            notarize_description: String::new(),
+            notarize_result: None,
             settings_old_password: Zeroizing::new(String::new()),
             settings_new_password: Zeroizing::new(String::new()),
             settings_new_password_confirm: Zeroizing::new(String::new()),

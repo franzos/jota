@@ -15,6 +15,7 @@ pub struct WalletService {
     network: NetworkClient,
     signer: Arc<dyn Signer>,
     network_name: String,
+    notarization_package: Option<ObjectId>,
     coin_meta_cache: tokio::sync::Mutex<HashMap<String, CoinMeta>>,
 }
 
@@ -28,8 +29,14 @@ impl WalletService {
             network,
             signer,
             network_name,
+            notarization_package: None,
             coin_meta_cache: tokio::sync::Mutex::new(HashMap::new()),
         }
+    }
+
+    pub fn with_notarization_package(mut self, package: Option<ObjectId>) -> Self {
+        self.notarization_package = package;
+        self
     }
 
     pub fn address(&self) -> &Address {
@@ -102,6 +109,37 @@ impl WalletService {
 
     pub fn sign_message(&self, msg: &[u8]) -> Result<SignedMessage> {
         self.signer.sign_message(msg)
+    }
+
+    pub fn notarization_package(&self) -> Option<ObjectId> {
+        self.resolve_notarization_package()
+    }
+
+    /// Resolve the notarization package: explicit config > testnet default.
+    fn resolve_notarization_package(&self) -> Option<ObjectId> {
+        if self.notarization_package.is_some() {
+            return self.notarization_package;
+        }
+        if self.network_name == "testnet" {
+            ObjectId::from_hex(crate::network::TESTNET_NOTARIZATION_PACKAGE).ok()
+        } else {
+            None
+        }
+    }
+
+    pub async fn notarize(
+        &self,
+        message: &str,
+        description: Option<&str>,
+    ) -> Result<TransferResult> {
+        let pkg = self.resolve_notarization_package().ok_or_else(|| {
+            anyhow::anyhow!(
+                "Notarization not configured. Set IOTA_NOTARIZATION_PKG_ID or use --notarization-package."
+            )
+        })?;
+        self.network
+            .notarize(self.signer.as_ref(), self.signer.address(), pkg, message, description)
+            .await
     }
 
     pub async fn default_iota_name(&self, address: &Address) -> Result<Option<String>> {
