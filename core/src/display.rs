@@ -1,6 +1,8 @@
 /// Output formatting — IOTA denomination conversion and display helpers.
 ///
 /// IOTA uses 9 decimal places (nanos). 1 IOTA = 1_000_000_000 nanos.
+use anyhow::{anyhow, bail, Result};
+
 use crate::network::{NetworkStatus, StakeStatus, StakedIotaSummary, TokenBalance, TransactionDetailsSummary, TransactionDirection, TransactionSummary};
 
 const NANOS_PER_IOTA: u64 = 1_000_000_000;
@@ -24,16 +26,15 @@ pub fn format_balance(nanos: impl Into<u128>) -> String {
 
 /// Parse a human-readable IOTA amount string into nanos.
 /// Accepts: "1.5" -> 1_500_000_000, "1" -> 1_000_000_000, "0.001" -> 1_000_000
-#[must_use = "parsing result should be checked"]
-pub fn parse_iota_amount(input: &str) -> Result<u64, String> {
+pub fn parse_iota_amount(input: &str) -> Result<u64> {
     let input = input.trim();
 
     if input.is_empty() {
-        return Err("Amount cannot be empty".to_string());
+        bail!("Amount cannot be empty");
     }
 
     if input.starts_with('-') {
-        return Err("Amount must be positive".to_string());
+        bail!("Amount must be positive");
     }
 
     // Check if it's purely numeric (nanos)
@@ -41,19 +42,19 @@ pub fn parse_iota_amount(input: &str) -> Result<u64, String> {
         // If the number is very large, assume it's nanos. If small, assume IOTA.
         // To avoid ambiguity, we always treat bare integers as IOTA.
         return nanos.checked_mul(NANOS_PER_IOTA).ok_or_else(|| {
-            "Amount too large".to_string()
+            anyhow!("Amount too large")
         });
     }
 
     // Try parsing as decimal IOTA
     let parts: Vec<&str> = input.split('.').collect();
     if parts.len() > 2 {
-        return Err("Invalid amount format. Use IOTA units like '1.5' or '0.001'.".to_string());
+        bail!("Invalid amount format. Use IOTA units like '1.5' or '0.001'.");
     }
 
     let whole: u64 = parts[0]
         .parse()
-        .map_err(|_| format!("Invalid whole part: '{}'", parts[0]))?;
+        .map_err(|_| anyhow!("Invalid whole part: '{}'", parts[0]))?;
 
     let frac_nanos = if parts.len() == 2 {
         let frac_str = parts[1];
@@ -61,13 +62,13 @@ pub fn parse_iota_amount(input: &str) -> Result<u64, String> {
             // Trailing dot: "1." is treated as "1.0"
             0
         } else if frac_str.len() > 9 {
-            return Err("Too many decimal places. IOTA supports up to 9.".to_string());
+            bail!("Too many decimal places. IOTA supports up to 9.");
         } else {
             // Pad to 9 digits
             let padded = format!("{:0<9}", frac_str);
             padded
                 .parse::<u64>()
-                .map_err(|_| format!("Invalid fractional part: '{frac_str}'"))?
+                .map_err(|_| anyhow!("Invalid fractional part: '{frac_str}'"))?
         }
     } else {
         0
@@ -76,7 +77,7 @@ pub fn parse_iota_amount(input: &str) -> Result<u64, String> {
     let total = whole
         .checked_mul(NANOS_PER_IOTA)
         .and_then(|w| w.checked_add(frac_nanos))
-        .ok_or_else(|| "Amount too large".to_string())?;
+        .ok_or_else(|| anyhow!("Amount too large"))?;
 
     Ok(total)
 }

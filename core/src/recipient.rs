@@ -1,5 +1,6 @@
 use std::fmt;
 
+use anyhow::{anyhow, bail};
 use iota_sdk::types::Address;
 
 /// A recipient that may be a raw address or an IOTA Name (e.g. `franz.iota`).
@@ -13,17 +14,17 @@ pub enum Recipient {
 impl Recipient {
     /// Parse user input as either a hex address or an `.iota` name.
     /// Tries `Address::from_hex` first, then checks for a valid `.iota` suffix.
-    pub fn parse(input: &str) -> Result<Self, String> {
+    pub fn parse(input: &str) -> anyhow::Result<Self> {
         let input = input.trim();
         if input.is_empty() {
-            return Err("Recipient cannot be empty.".into());
+            bail!("Recipient cannot be empty.");
         }
 
         // Try hex address first
         if input.starts_with("0x") || input.starts_with("0X") {
             return Address::from_hex(input)
                 .map(Recipient::Address)
-                .map_err(|e| format!("Invalid address '{input}': {e}"));
+                .map_err(|e| anyhow!("Invalid address '{input}': {e}"));
         }
 
         // Check for .iota name (case-insensitive suffix)
@@ -32,14 +33,12 @@ impl Recipient {
             let name_part = &lower[..lower.len() - 5];
             // Basic validation: non-empty, no spaces, reasonable characters
             if name_part.is_empty() || name_part.contains(' ') {
-                return Err(format!("Invalid IOTA name '{input}'."));
+                bail!("Invalid IOTA name '{input}'.");
             }
             return Ok(Recipient::Name(lower));
         }
 
-        Err(format!(
-            "Invalid recipient '{input}'. Expected a 0x address or a .iota name."
-        ))
+        bail!("Invalid recipient '{input}'. Expected a 0x address or a .iota name.");
     }
 }
 

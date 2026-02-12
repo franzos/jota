@@ -333,7 +333,7 @@ impl App {
                 let recipient = match Recipient::parse(&recipient_str) {
                     Ok(r) => r,
                     Err(e) => {
-                        self.error_message = Some(e);
+                        self.error_message = Some(e.to_string());
                         return Task::none();
                     }
                 };
@@ -344,7 +344,7 @@ impl App {
                     }
                     Ok(a) => a,
                     Err(e) => {
-                        self.error_message = Some(e);
+                        self.error_message = Some(e.to_string());
                         return Task::none();
                     }
                 };
@@ -464,7 +464,7 @@ impl App {
                 let validator = match Recipient::parse(&validator_str) {
                     Ok(r) => r,
                     Err(e) => {
-                        self.error_message = Some(e);
+                        self.error_message = Some(e.to_string());
                         return Task::none();
                     }
                 };
@@ -475,7 +475,7 @@ impl App {
                     }
                     Ok(a) => a,
                     Err(e) => {
-                        self.error_message = Some(e);
+                        self.error_message = Some(e.to_string());
                         return Task::none();
                     }
                 };
