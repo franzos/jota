@@ -17,10 +17,11 @@ use iota_wallet_core::display::{format_balance, format_balance_with_symbol};
 use iota_wallet_core::list_wallets;
 use iota_wallet_core::network::{CoinMeta, StakedIotaSummary, TokenBalance, TransactionSummary};
 use iota_wallet_core::wallet::{Network, NetworkConfig};
+use iota_wallet_core::SignedMessage;
 
 use chart::BalanceChart;
 use messages::Message;
-use state::{Screen, WalletInfo};
+use state::{Screen, SignMode, WalletInfo};
 
 // IOTA Explorer dark-mode palette (iota2.darkmode)
 const BG:      Color = Color::from_rgb(0.051, 0.067, 0.090); // #0d1117
@@ -79,6 +80,15 @@ struct App {
     stakes: Vec<StakedIotaSummary>,
     validator_address: String,
     stake_amount: String,
+
+    // Sign / Verify
+    sign_message_input: String,
+    sign_mode: SignMode,
+    signed_result: Option<SignedMessage>,
+    verify_message_input: String,
+    verify_signature_input: String,
+    verify_public_key_input: String,
+    verify_result: Option<bool>,
 
     // Settings — password change
     settings_old_password: Zeroizing<String>,
@@ -215,6 +225,13 @@ impl App {
             stakes: Vec::new(),
             validator_address: String::new(),
             stake_amount: String::new(),
+            sign_message_input: String::new(),
+            sign_mode: SignMode::Sign,
+            signed_result: None,
+            verify_message_input: String::new(),
+            verify_signature_input: String::new(),
+            verify_public_key_input: String::new(),
+            verify_result: None,
             settings_old_password: Zeroizing::new(String::new()),
             settings_new_password: Zeroizing::new(String::new()),
             settings_new_password_confirm: Zeroizing::new(String::new()),
@@ -282,7 +299,7 @@ impl App {
                 .into()
             }
             Screen::Account | Screen::Send | Screen::Receive | Screen::History
-            | Screen::Staking | Screen::Settings => self.view_main(),
+            | Screen::Staking | Screen::Sign | Screen::Settings => self.view_main(),
         }
     }
 
@@ -295,6 +312,7 @@ impl App {
             Screen::Receive => self.view_receive(),
             Screen::History => self.view_history(),
             Screen::Staking => self.view_staking(),
+            Screen::Sign => self.view_sign(),
             Screen::Settings => self.view_settings(),
             _ => unreachable!(),
         };
@@ -334,6 +352,7 @@ impl App {
             nav_btn("↙", "Receive", Screen::Receive),
             nav_btn("≡", "History", Screen::History),
             nav_btn("◆", "Staking", Screen::Staking),
+            nav_btn("✎", "Sign", Screen::Sign),
         ]
         .spacing(2);
 

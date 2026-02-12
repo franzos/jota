@@ -1,7 +1,8 @@
 use crate::TokenOption;
-use crate::state::{Screen, WalletInfo};
+use crate::state::{Screen, SignMode, WalletInfo};
 use iota_wallet_core::network::{CoinMeta, StakedIotaSummary, TokenBalance, TransactionSummary};
 use iota_wallet_core::wallet::Network;
+use iota_wallet_core::SignedMessage;
 use zeroize::Zeroizing;
 
 // -- Messages --
@@ -73,6 +74,19 @@ pub(crate) enum Message {
     AccountGoPressed,
     AccountIndexChanged(u64),
     AccountSwitched(Result<WalletInfo, String>),
+
+    // Sign / Verify
+    SignMessageInputChanged(String),
+    SignModeChanged(SignMode),
+    ConfirmSign,
+    SignCompleted(Result<SignedMessage, String>),
+    CopySignature,
+    CopyPublicKey,
+    VerifyMessageInputChanged(String),
+    VerifySignatureInputChanged(String),
+    VerifyPublicKeyInputChanged(String),
+    ConfirmVerify,
+    VerifyCompleted(Result<bool, String>),
 
     // Settings
     NetworkChanged(Network),

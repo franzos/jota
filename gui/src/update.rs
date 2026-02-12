@@ -2,7 +2,7 @@ use crate::messages::Message;
 use crate::state::{Screen, WalletInfo};
 use crate::App;
 use iced::Task;
-use iota_wallet_core::{ObjectId, Recipient};
+use iota_wallet_core::{ObjectId, Recipient, SignedMessage, verify_message};
 use iota_wallet_core::cache::TransactionCache;
 use iota_wallet_core::display::{parse_iota_amount, parse_token_amount};
 use iota_wallet_core::network::{
@@ -666,6 +666,117 @@ impl App {
                 Task::none()
             }
 
+            // -- Sign / Verify --
+            Message::SignMessageInputChanged(v) => {
+                self.sign_message_input = v;
+                Task::none()
+            }
+            Message::SignModeChanged(mode) => {
+                self.sign_mode = mode;
+                self.signed_result = None;
+                self.verify_result = None;
+                self.error_message = None;
+                self.success_message = None;
+                Task::none()
+            }
+            Message::ConfirmSign => {
+                let Some(info) = &self.wallet_info else {
+                    return Task::none();
+                };
+                if self.sign_message_input.is_empty() {
+                    self.error_message = Some("Message is required".into());
+                    return Task::none();
+                }
+                let service = info.service.clone();
+                let msg = self.sign_message_input.clone();
+                self.loading += 1;
+                self.error_message = None;
+
+                Task::perform(
+                    async move {
+                        service.sign_message(msg.as_bytes())
+                    },
+                    |r: Result<SignedMessage, anyhow::Error>| {
+                        Message::SignCompleted(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+            Message::SignCompleted(result) => {
+                self.loading = self.loading.saturating_sub(1);
+                match result {
+                    Ok(signed) => {
+                        self.signed_result = Some(signed);
+                    }
+                    Err(e) => self.error_message = Some(e),
+                }
+                Task::none()
+            }
+            Message::CopySignature => {
+                if let Some(signed) = &self.signed_result {
+                    if let Some(cb) = &mut self.clipboard {
+                        match cb.set_text(&signed.signature) {
+                            Ok(_) => self.status_message = Some("Signature copied".into()),
+                            Err(e) => self.error_message = Some(format!("Copy failed: {e}")),
+                        }
+                    }
+                }
+                Task::none()
+            }
+            Message::CopyPublicKey => {
+                if let Some(signed) = &self.signed_result {
+                    if let Some(cb) = &mut self.clipboard {
+                        match cb.set_text(&signed.public_key) {
+                            Ok(_) => self.status_message = Some("Public key copied".into()),
+                            Err(e) => self.error_message = Some(format!("Copy failed: {e}")),
+                        }
+                    }
+                }
+                Task::none()
+            }
+            Message::VerifyMessageInputChanged(v) => {
+                self.verify_message_input = v;
+                self.verify_result = None;
+                Task::none()
+            }
+            Message::VerifySignatureInputChanged(v) => {
+                self.verify_signature_input = v;
+                self.verify_result = None;
+                Task::none()
+            }
+            Message::VerifyPublicKeyInputChanged(v) => {
+                self.verify_public_key_input = v;
+                self.verify_result = None;
+                Task::none()
+            }
+            Message::ConfirmVerify => {
+                let msg = self.verify_message_input.clone();
+                let sig = self.verify_signature_input.clone();
+                let pk = self.verify_public_key_input.clone();
+                if msg.is_empty() || sig.is_empty() || pk.is_empty() {
+                    self.error_message = Some("All fields are required".into());
+                    return Task::none();
+                }
+                self.loading += 1;
+                self.error_message = None;
+
+                Task::perform(
+                    async move {
+                        verify_message(msg.as_bytes(), &sig, &pk)
+                    },
+                    |r: Result<bool, anyhow::Error>| {
+                        Message::VerifyCompleted(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+            Message::VerifyCompleted(result) => {
+                self.loading = self.loading.saturating_sub(1);
+                match result {
+                    Ok(valid) => self.verify_result = Some(valid),
+                    Err(e) => self.error_message = Some(e),
+                }
+                Task::none()
+            }
+
             Message::NetworkChanged(network) => {
                 let config = NetworkConfig {
                     network,
@@ -783,6 +894,12 @@ impl App {
         self.account_input.clear();
         self.validator_address.clear();
         self.stake_amount.clear();
+        self.sign_message_input.clear();
+        self.signed_result = None;
+        self.verify_message_input.clear();
+        self.verify_signature_input.clear();
+        self.verify_public_key_input.clear();
+        self.verify_result = None;
         self.settings_old_password.zeroize();
         self.settings_new_password.zeroize();
         self.settings_new_password_confirm.zeroize();

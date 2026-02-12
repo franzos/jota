@@ -20,7 +20,14 @@ pub(crate) enum Screen {
     Receive,
     History,
     Staking,
+    Sign,
     Settings,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum SignMode {
+    Sign,
+    Verify,
 }
 
 // -- Cloneable wallet info extracted after open/create --

@@ -157,6 +157,53 @@ impl Command {
                 Ok(Command::Account { index })
             }
 
+            "sign_message" | "sign" => {
+                // Rejoin arg1 + arg2 to capture the full message text
+                let message = match (arg1, arg2) {
+                    (Some(a), Some(b)) => format!("{a} {b}"),
+                    (Some(a), None) => a.to_string(),
+                    _ => bail!("Missing message. Usage: sign_message <message>"),
+                };
+                Ok(Command::SignMessage { message })
+            }
+
+            "verify_message" | "verify" => {
+                // Re-split with 4 parts: cmd, message, signature, public_key
+                let mut parts = input.splitn(4, char::is_whitespace);
+                let _cmd = parts.next(); // skip command
+                let message = parts
+                    .next()
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Missing arguments. Usage: verify <message> <signature_b64> <public_key_b64>"
+                        )
+                    })?
+                    .to_string();
+                let signature = parts
+                    .next()
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Missing signature. Usage: verify <message> <signature_b64> <public_key_b64>"
+                        )
+                    })?
+                    .to_string();
+                let public_key = parts
+                    .next()
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Missing public key. Usage: verify <message> <signature_b64> <public_key_b64>"
+                        )
+                    })?
+                    .to_string();
+                Ok(Command::VerifyMessage { message, signature, public_key })
+            }
+
             "password" | "passwd" => Ok(Command::Password),
 
             "help" | "?" => Ok(Command::Help {
@@ -521,6 +568,46 @@ mod tests {
     fn transfer_token_scientific_notation_rejected() {
         let input = format!("transfer {TEST_ADDR} 1e10 usdt");
         assert!(Command::parse(&input).is_err(), "scientific notation should be rejected");
+    }
+
+    #[test]
+    fn parse_sign_message() {
+        let cmd = Command::parse("sign_message hello world").unwrap();
+        match cmd {
+            Command::SignMessage { message } => assert_eq!(message, "hello world"),
+            other => panic!("expected SignMessage, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_sign_alias() {
+        let cmd = Command::parse("sign test").unwrap();
+        assert!(matches!(cmd, Command::SignMessage { .. }));
+    }
+
+    #[test]
+    fn parse_sign_message_missing() {
+        assert!(Command::parse("sign_message").is_err());
+    }
+
+    #[test]
+    fn parse_verify_message() {
+        let cmd = Command::parse("verify hello sig123 pk456").unwrap();
+        match cmd {
+            Command::VerifyMessage { message, signature, public_key } => {
+                assert_eq!(message, "hello");
+                assert_eq!(signature, "sig123");
+                assert_eq!(public_key, "pk456");
+            }
+            other => panic!("expected VerifyMessage, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_verify_missing_args() {
+        assert!(Command::parse("verify").is_err());
+        assert!(Command::parse("verify hello").is_err());
+        assert!(Command::parse("verify hello sig").is_err());
     }
 
     #[test]

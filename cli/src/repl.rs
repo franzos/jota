@@ -121,6 +121,8 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
         "show_transfers".into(), "transfers".into(), "txs".into(),
         "show_transfer".into(), "tx".into(),
         "stake".into(), "unstake".into(), "stakes".into(),
+        "sign_message".into(), "sign".into(),
+        "verify_message".into(), "verify".into(),
         "tokens".into(), "token_balances".into(),
         "status".into(),
         "faucet".into(),

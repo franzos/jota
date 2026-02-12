@@ -48,6 +48,10 @@ pub enum Command {
     Seed,
     /// Show or switch account index: account [index]
     Account { index: Option<u64> },
+    /// Sign an arbitrary message with the wallet's key
+    SignMessage { message: String },
+    /// Verify a signed message: verify <message> <signature_b64> <public_key_b64>
+    VerifyMessage { message: String, signature: String, public_key: String },
     /// Change wallet password
     Password,
     /// Print help
@@ -100,6 +104,14 @@ impl Command {
                 display::format_balance(*amount),
                 display_recipient(validator),
             )),
+            Command::SignMessage { message } => {
+                let preview = if message.len() > 40 {
+                    format!("{}...", &message[..40])
+                } else {
+                    message.clone()
+                };
+                Some(format!("Sign message \"{preview}\" with your private key?"))
+            }
             Command::Seed => Some("This will display sensitive data. Continue?".to_string()),
             Command::Password => Some("Change wallet password?".to_string()),
             _ => None,

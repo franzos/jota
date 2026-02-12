@@ -6,5 +6,6 @@ mod receive;
 mod recover;
 mod send;
 mod settings;
+mod sign;
 mod staking;
 mod welcome;

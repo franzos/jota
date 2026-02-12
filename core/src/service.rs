@@ -9,7 +9,7 @@ use crate::network::{
     TransactionDetailsSummary, TransferResult,
 };
 use crate::recipient::{Recipient, ResolvedRecipient};
-use crate::signer::Signer;
+use crate::signer::{Signer, SignedMessage};
 
 pub struct WalletService {
     network: NetworkClient,
@@ -98,6 +98,10 @@ impl WalletService {
 
     pub async fn resolve_recipient(&self, recipient: &Recipient) -> Result<ResolvedRecipient> {
         self.network.resolve_recipient(recipient).await
+    }
+
+    pub fn sign_message(&self, msg: &[u8]) -> Result<SignedMessage> {
+        self.signer.sign_message(msg)
     }
 
     pub async fn default_iota_name(&self, address: &Address) -> Result<Option<String>> {

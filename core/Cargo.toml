@@ -23,6 +23,7 @@ bip39 = { version = "2", features = ["rand"] }
 zeroize = { version = "1", features = ["derive"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 dirs = "5"
+base64ct = { version = "1", features = ["alloc"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }

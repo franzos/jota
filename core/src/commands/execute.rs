@@ -425,6 +425,37 @@ impl Command {
                 bail!("The password command requires interactive mode. Use the REPL instead of --cmd.")
             }
 
+            Command::SignMessage { message } => {
+                let signed = service.sign_message(message.as_bytes())?;
+                if json_output {
+                    Ok(serde_json::to_string_pretty(&signed)?)
+                } else {
+                    Ok(format!(
+                        "Message signed!\n  Message:    {}\n  Signature:  {}\n  Public key: {}\n  Address:    {}",
+                        signed.message, signed.signature, signed.public_key, signed.address,
+                    ))
+                }
+            }
+
+            Command::VerifyMessage { message, signature, public_key } => {
+                let valid = crate::signer::verify_message(
+                    message.as_bytes(),
+                    signature,
+                    public_key,
+                )?;
+                if json_output {
+                    Ok(serde_json::json!({
+                        "valid": valid,
+                        "message": message,
+                    })
+                    .to_string())
+                } else if valid {
+                    Ok("Signature is VALID".to_string())
+                } else {
+                    Ok("Signature is INVALID".to_string())
+                }
+            }
+
             Command::Help { command } => Ok(help_text(command.as_deref())),
 
             Command::Exit => Ok(String::new()),

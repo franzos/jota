@@ -14,7 +14,7 @@ pub use network::NetworkClient;
 pub use commands::Command;
 pub use recipient::{Recipient, ResolvedRecipient};
 pub use service::WalletService;
-pub use signer::{Signer, SoftwareSigner};
+pub use signer::{Signer, SoftwareSigner, SignedMessage, verify_message};
 
 pub use iota_sdk::types::{Address, ObjectId};
 
