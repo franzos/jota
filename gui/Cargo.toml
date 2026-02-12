@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 iota-wallet-core = { path = "../core" }
-iced = { version = "0.14", features = ["tokio", "svg", "canvas"] }
+iced = { version = "0.14", features = ["tokio", "svg", "canvas", "qr_code"] }
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
 zeroize = { version = "1", features = ["derive"] }

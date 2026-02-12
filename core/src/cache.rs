@@ -251,8 +251,8 @@ impl TransactionCache {
     ) -> Result<Vec<(u64, i64)>> {
         let mut stmt = self.conn.prepare(
             "SELECT epoch,
-                    SUM(CASE WHEN direction = 'in' THEN amount ELSE 0 END)
-                  - SUM(CASE WHEN direction = 'out' THEN amount + COALESCE(fee, 0) ELSE 0 END)
+                    SUM(CASE WHEN direction = 'in' THEN COALESCE(amount, 0) ELSE 0 END)
+                  - SUM(CASE WHEN direction = 'out' THEN COALESCE(amount, 0) + COALESCE(fee, 0) ELSE 0 END)
              FROM transactions
              WHERE network = ?1 AND address = ?2
              GROUP BY epoch

@@ -1,6 +1,6 @@
 use crate::messages::Message;
 use crate::{styles, App, BG, BORDER, MUTED};
-use iced::widget::{button, column, container, row, text, Space};
+use iced::widget::{button, column, container, row, text, qr_code, Space};
 use iced::{Element, Fill, Font};
 
 impl App {
@@ -31,13 +31,18 @@ impl App {
             .style(styles::btn_primary)
             .on_press(Message::CopyAddress);
 
-        let card_content = column![
-            text("Your Address").size(12).color(MUTED),
-            addr_container,
-            Space::new().height(8),
-            copy,
-        ]
-        .spacing(8);
+        let mut card_content = column![text("Your Address").size(12).color(MUTED),]
+            .spacing(8);
+
+        if let Some(data) = &self.qr_data {
+            card_content = card_content
+                .push(container(qr_code(data).cell_size(6)).center_x(Fill));
+        }
+
+        card_content = card_content
+            .push(addr_container)
+            .push(Space::new().height(8))
+            .push(copy);
 
         let header = row![title, Space::new().width(Fill)]
             .align_y(iced::Alignment::Center);

@@ -6,7 +6,7 @@ mod styles;
 mod update;
 mod views;
 
-use iced::widget::{button, column, container, pick_list, row, scrollable, text, text_input, Space};
+use iced::widget::{button, column, container, pick_list, qr_code, row, scrollable, text, text_input, Space};
 use iced::theme::Palette;
 use iced::{Color, Element, Fill, Font, Length, Task, Theme};
 
@@ -116,6 +116,9 @@ struct App {
     nfts: Vec<NftSummary>,
     send_nft_object_id: Option<String>,
     send_nft_recipient: String,
+
+    // QR code for receive screen
+    qr_data: Option<qr_code::Data>,
 
     // Persistent clipboard (Linux requires the instance to stay alive)
     clipboard: Option<arboard::Clipboard>,
@@ -253,6 +256,7 @@ impl App {
             nfts: Vec::new(),
             send_nft_object_id: None,
             send_nft_recipient: String::new(),
+            qr_data: None,
             clipboard: arboard::Clipboard::new()
                 .map_err(|e| eprintln!("clipboard init failed: {e}"))
                 .ok(),

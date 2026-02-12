@@ -1,6 +1,7 @@
 use crate::messages::Message;
 use crate::state::{Screen, WalletInfo};
 use crate::App;
+use iced::widget::qr_code;
 use iced::Task;
 use iota_wallet_core::{ObjectId, Recipient, SignedMessage, verify_message};
 use iota_wallet_core::cache::TransactionCache;
@@ -25,6 +26,7 @@ impl App {
                 if screen == Screen::WalletSelect {
                     self.wallet_names = list_wallets(&self.wallet_dir);
                     self.wallet_info = None;
+                    self.qr_data = None;
                     self.balance = None;
                     self.transactions.clear();
                     self.account_transactions.clear();
@@ -123,6 +125,7 @@ impl App {
                 self.loading = self.loading.saturating_sub(1);
                 match result {
                     Ok(info) => {
+                        self.qr_data = qr_code::Data::new(&info.address_string).ok();
                         self.wallet_info = Some(info);
                         self.clear_form();
                         self.screen = Screen::Account;
@@ -174,6 +177,7 @@ impl App {
                 match result {
                     Ok((info, mnemonic)) => {
                         self.selected_wallet = Some(self.wallet_name.clone());
+                        self.qr_data = qr_code::Data::new(&info.address_string).ok();
                         self.wallet_info = Some(info);
                         self.created_mnemonic = Some(mnemonic);
                     }
@@ -234,6 +238,7 @@ impl App {
                 match result {
                     Ok(info) => {
                         self.selected_wallet = Some(self.wallet_name.clone());
+                        self.qr_data = qr_code::Data::new(&info.address_string).ok();
                         self.wallet_info = Some(info);
                         self.clear_form();
                         self.screen = Screen::Account;
@@ -742,6 +747,7 @@ impl App {
                 self.loading = self.loading.saturating_sub(1);
                 match result {
                     Ok(info) => {
+                        self.qr_data = qr_code::Data::new(&info.address_string).ok();
                         self.wallet_info = Some(info);
                         self.balance = None;
                         self.transactions.clear();
