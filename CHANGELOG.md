@@ -1,4 +1,9 @@
-# Changelog
+## [0.1.5] - 2026-02-12
+
+### Added
+- Early support for NFT's
+- Early support for L1 (future USDT?)
+- Message signing and verification
 
 ## [0.1.4] - 2026-02-11
 

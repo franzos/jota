@@ -2,7 +2,7 @@
 
 A Monero-inspired wallet for IOTA Rebased. Supports interactive mode, one-shot commands for scripting, a native GUI, and encrypted wallet files.
 
-**NOTE: This is an early prototype. Use at your own risk.**
+**NOTE: This is an EARLY PROTOTYPE. USE AT YOUR OWN RISK.**
 
 ## Install
 
