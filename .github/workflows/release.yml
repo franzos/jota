@@ -14,7 +14,7 @@ jobs:
       matrix:
         include:
           - target: x86_64-apple-darwin
-            os: macos-latest
+            os: macos-13
           - target: aarch64-apple-darwin
             os: macos-latest
           - target: x86_64-unknown-linux-gnu
@@ -33,17 +33,89 @@ jobs:
       - name: Package
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf ../../../iota-wallet-${{ matrix.target }}.tar.gz iota-wallet
+          tar czf ../../../iota-wallet-${{ matrix.target }}.tar.gz iota-wallet iota-wallet-gui
           cd ../../..
           shasum -a 256 iota-wallet-${{ matrix.target }}.tar.gz > iota-wallet-${{ matrix.target }}.tar.gz.sha256
+
+      - name: Package AppImage
+        if: contains(matrix.target, 'linux')
+        run: |
+          sudo apt-get update && sudo apt-get install -y librsvg2-bin
+          rsvg-convert -w 256 -h 256 gui/assets/icon.svg -o iota-wallet-gui.png
+
+          export APPIMAGE_EXTRACT_AND_RUN=1
+
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-appimage-x86_64.AppImage
+
+          export OUTPUT=iota-wallet-gui-${{ matrix.target }}.AppImage
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --executable target/${{ matrix.target }}/release/iota-wallet-gui \
+            --desktop-file gui/assets/iota-wallet-gui.desktop \
+            --icon-file iota-wallet-gui.png \
+            --output appimage
+
+          shasum -a 256 iota-wallet-gui-${{ matrix.target }}.AppImage > iota-wallet-gui-${{ matrix.target }}.AppImage.sha256
+
+      - name: Package DMG
+        if: contains(matrix.target, 'apple-darwin')
+        run: |
+          APP="IOTA Wallet.app"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp target/${{ matrix.target }}/release/iota-wallet-gui "$APP/Contents/MacOS/"
+
+          VERSION=${GITHUB_REF_NAME#v}
+          cat > "$APP/Contents/Info.plist" << PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key><string>IOTA Wallet</string>
+            <key>CFBundleExecutable</key><string>iota-wallet-gui</string>
+            <key>CFBundleIdentifier</key><string>com.gofranz.iota-wallet</string>
+            <key>CFBundleVersion</key><string>${VERSION}</string>
+            <key>CFBundleShortVersionString</key><string>${VERSION}</string>
+            <key>CFBundleIconFile</key><string>AppIcon</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict>
+          </plist>
+          PLIST
+
+          brew install librsvg
+          rsvg-convert -w 1024 -h 1024 gui/assets/icon.svg -o icon_1024.png
+
+          mkdir -p icon.iconset
+          sips -z 16 16     icon_1024.png --out icon.iconset/icon_16x16.png
+          sips -z 32 32     icon_1024.png --out icon.iconset/icon_16x16@2x.png
+          sips -z 32 32     icon_1024.png --out icon.iconset/icon_32x32.png
+          sips -z 64 64     icon_1024.png --out icon.iconset/icon_32x32@2x.png
+          sips -z 128 128   icon_1024.png --out icon.iconset/icon_128x128.png
+          sips -z 256 256   icon_1024.png --out icon.iconset/icon_128x128@2x.png
+          sips -z 256 256   icon_1024.png --out icon.iconset/icon_256x256.png
+          sips -z 512 512   icon_1024.png --out icon.iconset/icon_256x256@2x.png
+          sips -z 512 512   icon_1024.png --out icon.iconset/icon_512x512.png
+          sips -z 1024 1024 icon_1024.png --out icon.iconset/icon_512x512@2x.png
+          iconutil -c icns icon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
+
+          hdiutil create -volname "IOTA Wallet" -srcfolder "$APP" -ov -format UDZO \
+            iota-wallet-gui-${{ matrix.target }}.dmg
+          shasum -a 256 iota-wallet-gui-${{ matrix.target }}.dmg > iota-wallet-gui-${{ matrix.target }}.dmg.sha256
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: iota-wallet-${{ matrix.target }}
+          if-no-files-found: ignore
           path: |
             iota-wallet-${{ matrix.target }}.tar.gz
             iota-wallet-${{ matrix.target }}.tar.gz.sha256
+            iota-wallet-gui-${{ matrix.target }}.AppImage
+            iota-wallet-gui-${{ matrix.target }}.AppImage.sha256
+            iota-wallet-gui-${{ matrix.target }}.dmg
+            iota-wallet-gui-${{ matrix.target }}.dmg.sha256
 
   release:
     needs: [build]
@@ -62,3 +134,7 @@ jobs:
           files: |
             iota-wallet-*.tar.gz
             iota-wallet-*.tar.gz.sha256
+            iota-wallet-gui-*.AppImage
+            iota-wallet-gui-*.AppImage.sha256
+            iota-wallet-gui-*.dmg
+            iota-wallet-gui-*.dmg.sha256
