@@ -36,23 +36,23 @@ pub(crate) enum Message {
     RecoverWallet,
     WalletRecovered(Result<WalletInfo, String>),
 
-    // Ledger
-    #[cfg(feature = "ledger")]
-    LedgerConnect,
-    #[cfg(feature = "ledger")]
-    LedgerConnected(Result<WalletInfo, String>),
+    // Hardware wallet
+    #[cfg(feature = "hardware-wallets")]
+    HardwareConnect,
+    #[cfg(feature = "hardware-wallets")]
+    HardwareConnected(Result<WalletInfo, String>),
 
-    // Ledger address verification
-    #[cfg(feature = "ledger")]
-    LedgerVerifyAddress,
-    #[cfg(feature = "ledger")]
-    LedgerVerifyAddressCompleted(Result<(), String>),
+    // Hardware wallet address verification
+    #[cfg(feature = "hardware-wallets")]
+    HardwareVerifyAddress,
+    #[cfg(feature = "hardware-wallets")]
+    HardwareVerifyAddressCompleted(Result<(), String>),
 
-    // Ledger reconnect
-    #[cfg(feature = "ledger")]
-    LedgerReconnect,
-    #[cfg(feature = "ledger")]
-    LedgerReconnected(Result<(), String>),
+    // Hardware wallet reconnect
+    #[cfg(feature = "hardware-wallets")]
+    HardwareReconnect,
+    #[cfg(feature = "hardware-wallets")]
+    HardwareReconnected(Result<(), String>),
 
     // Dashboard
     RefreshBalance,

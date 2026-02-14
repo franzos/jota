@@ -9,7 +9,8 @@ repository.workspace = true
 
 [features]
 default = []
-ledger = ["dep:ledger-iota-rebased"]
+hardware-wallets = []
+ledger = ["hardware-wallets", "dep:ledger-iota-rebased"]
 
 [dependencies]
 iota-sdk = "3.0.0-alpha.1"

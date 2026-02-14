@@ -14,7 +14,7 @@ use crate::signer::Signer;
 
 impl NetworkClient {
     /// Fetch all objects referenced by a transaction (gas payment + PTB inputs).
-    /// Used to provide coin metadata for Ledger clear signing.
+    /// Used to provide coin metadata for hardware clear signing.
     async fn fetch_input_objects(&self, tx: &Transaction) -> Result<Vec<Object>> {
         let Transaction::V1(v1) = tx;
 

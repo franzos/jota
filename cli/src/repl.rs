@@ -24,10 +24,9 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
     if !wallets.is_empty() {
         println!("Existing wallets:");
         for entry in &wallets {
-            let suffix = if entry.wallet_type == iota_wallet_core::WalletType::Ledger {
-                " (Ledger)"
-            } else {
-                ""
+            let suffix = match entry.wallet_type {
+                iota_wallet_core::WalletType::Hardware(kind) => format!(" ({kind})"),
+                _ => String::new(),
             };
             println!("  - {}{suffix}", entry.name);
         }
@@ -46,22 +45,23 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
         #[allow(unused_mut)]
         let mut w = Wallet::open(&wallet_path, password.as_bytes())?;
 
-        // For Ledger wallets, verify the device is connected and address matches
-        #[cfg(feature = "ledger")]
-        if w.is_ledger() {
-            use iota_wallet_core::ledger_signer::connect_and_verify;
+        // For hardware wallets, verify the device is connected and address matches
+        if w.is_hardware() {
+            #[cfg(feature = "ledger")]
+            {
+                use iota_wallet_core::ledger_signer::connect_and_verify;
 
-            let path = iota_wallet_core::bip32_path_for(
-                w.network_config().network,
-                w.account_index() as u32,
-            );
-            println!("Connecting to Ledger device...");
-            connect_and_verify(path, w.address())?;
-        }
-
-        #[cfg(not(feature = "ledger"))]
-        if w.is_ledger() {
-            anyhow::bail!("Ledger support not compiled in.");
+                let path = iota_wallet_core::bip32_path_for(
+                    w.network_config().network,
+                    w.account_index() as u32,
+                );
+                println!("Connecting to hardware wallet...");
+                connect_and_verify(path, w.address())?;
+            }
+            #[cfg(not(feature = "ledger"))]
+            {
+                anyhow::bail!("Hardware wallet support not compiled in.");
+            }
         }
 
         let pw_bytes = Zeroizing::new(password.as_bytes().to_vec());
@@ -105,26 +105,27 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                 w
             }
             #[cfg(feature = "ledger")]
-            WalletAction::ConnectLedger => {
+            WalletAction::ConnectHardware => {
                 use iota_wallet_core::ledger_signer::connect_with_verification;
                 use iota_wallet_core::Signer;
 
                 let path = iota_wallet_core::bip32_path_for(network_config.network, 0);
-                println!("Connecting to Ledger device...");
-                println!("Verify the address on your Ledger device...");
+                println!("Connecting to hardware wallet...");
+                println!("Verify the address on your device...");
                 let signer = connect_with_verification(path)?;
                 println!("Address: {}", signer.address());
                 println!("Address confirmed.");
 
                 let address = *signer.address();
-                let w = Wallet::create_ledger(
+                let w = Wallet::create_hardware(
                     wallet_path.clone(),
                     password.as_bytes(),
                     address,
                     network_config,
+                    iota_wallet_core::HardwareKind::Ledger,
                 )?;
                 println!();
-                println!("Ledger wallet created in {}", wallet_path.display());
+                println!("Hardware wallet created in {}", wallet_path.display());
                 w
             }
             WalletAction::Quit => unreachable!(),
@@ -207,9 +208,9 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                     Ok(Command::Account { index: Some(idx) }) => {
                         match wallet.switch_account(idx) {
                             Ok(()) => {
-                                // For Ledger wallets, reconnect the device with the new path
+                                // For hardware wallets, reconnect the device with the new path
                                 #[cfg(feature = "ledger")]
-                                if wallet.is_ledger() {
+                                if wallet.is_hardware() {
                                     use iota_wallet_core::ledger_signer::connect_with_verification;
                                     use iota_wallet_core::Signer;
                                     let path = iota_wallet_core::bip32_path_for(
@@ -232,7 +233,7 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                                             .with_notarization_package(notarization_pkg);
                                         }
                                         Err(e) => {
-                                            eprintln!("Error connecting to Ledger: {e}");
+                                            eprintln!("Error connecting to hardware wallet: {e}");
                                             continue;
                                         }
                                     }
@@ -274,7 +275,7 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                     }
                     Ok(Command::Reconnect) => {
                         match service.reconnect_signer() {
-                            Ok(()) => println!("Ledger reconnected."),
+                            Ok(()) => println!("Device reconnected."),
                             Err(e) => eprintln!("Error: {e}"),
                         }
                     }
@@ -361,25 +362,25 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
 enum WalletAction {
     CreateNew,
     Recover,
-    #[cfg(feature = "ledger")]
-    ConnectLedger,
+    #[cfg(feature = "hardware-wallets")]
+    ConnectHardware,
     Quit,
 }
 
 fn prompt_action() -> Result<WalletAction> {
     println!("  1) Create new wallet");
     println!("  2) Recover from seed phrase");
-    #[cfg(feature = "ledger")]
-    println!("  3) Connect Ledger");
-    #[cfg(feature = "ledger")]
+    #[cfg(feature = "hardware-wallets")]
+    println!("  3) Connect hardware wallet");
+    #[cfg(feature = "hardware-wallets")]
     println!("  4) Quit");
-    #[cfg(not(feature = "ledger"))]
+    #[cfg(not(feature = "hardware-wallets"))]
     println!("  3) Quit");
     loop {
         let mut input = String::new();
-        #[cfg(feature = "ledger")]
+        #[cfg(feature = "hardware-wallets")]
         print!("Choice [1/2/3/4]: ");
-        #[cfg(not(feature = "ledger"))]
+        #[cfg(not(feature = "hardware-wallets"))]
         print!("Choice [1/2/3]: ");
         use std::io::Write;
         std::io::stdout().flush()?;
@@ -387,11 +388,11 @@ fn prompt_action() -> Result<WalletAction> {
         match input.trim() {
             "1" | "" => return Ok(WalletAction::CreateNew),
             "2" => return Ok(WalletAction::Recover),
-            #[cfg(feature = "ledger")]
-            "3" => return Ok(WalletAction::ConnectLedger),
-            #[cfg(feature = "ledger")]
+            #[cfg(feature = "hardware-wallets")]
+            "3" => return Ok(WalletAction::ConnectHardware),
+            #[cfg(feature = "hardware-wallets")]
             "4" | "q" => return Ok(WalletAction::Quit),
-            #[cfg(not(feature = "ledger"))]
+            #[cfg(not(feature = "hardware-wallets"))]
             "3" | "q" => return Ok(WalletAction::Quit),
             _ => println!("Please enter a valid option."),
         }
@@ -442,20 +443,19 @@ fn prompt_mnemonic() -> Result<Zeroizing<String>> {
 
 /// Build the appropriate signer for the REPL session.
 fn build_repl_signer(wallet: &Wallet, _cli: &Cli) -> Result<Arc<dyn iota_wallet_core::Signer>> {
-    #[cfg(feature = "ledger")]
-    if wallet.is_ledger() {
-        use iota_wallet_core::ledger_signer::connect_and_verify;
-        let path = iota_wallet_core::bip32_path_for(
-            wallet.network_config().network,
-            wallet.account_index() as u32,
-        );
-        let signer = connect_and_verify(path, wallet.address())?;
-        return Ok(Arc::new(signer));
-    }
-
-    #[cfg(not(feature = "ledger"))]
-    if wallet.is_ledger() {
-        anyhow::bail!("Ledger support not compiled in.");
+    if wallet.is_hardware() {
+        #[cfg(feature = "ledger")]
+        {
+            use iota_wallet_core::ledger_signer::connect_and_verify;
+            let path = iota_wallet_core::bip32_path_for(
+                wallet.network_config().network,
+                wallet.account_index() as u32,
+            );
+            let signer = connect_and_verify(path, wallet.address())?;
+            return Ok(Arc::new(signer));
+        }
+        #[cfg(not(feature = "ledger"))]
+        anyhow::bail!("Hardware wallet support not compiled in.");
     }
 
     Ok(Arc::new(wallet.signer()?))

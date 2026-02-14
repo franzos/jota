@@ -314,9 +314,9 @@ impl App {
                 .padding(20)
                 .into()
             }
-            #[cfg(feature = "ledger")]
-            Screen::LedgerConnect => {
-                let content = self.view_ledger_connect();
+            #[cfg(feature = "hardware-wallets")]
+            Screen::HardwareConnect => {
+                let content = self.view_hardware_connect();
                 container(
                     container(content).padding(32).style(styles::card),
                 )
@@ -475,8 +475,8 @@ impl App {
 
         // -- Account toolbar --
         let account_idx = info.account_index;
-        let acct_label = if info.is_ledger {
-            format!("Account {wallet_name} #{account_idx} (Ledger)")
+        let acct_label = if let Some(kind) = info.hardware_kind {
+            format!("Account {wallet_name} #{account_idx} ({kind})")
         } else {
             format!("Account {wallet_name} #{account_idx}")
         };

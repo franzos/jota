@@ -115,7 +115,7 @@ impl App {
                         let wallet = Wallet::open(&path, &pw)?;
 
                         #[cfg(feature = "ledger")]
-                        if wallet.is_ledger() {
+                        if wallet.is_hardware() {
                             use iota_wallet_core::ledger_signer::connect_and_verify;
 
                             let bip32_path = iota_wallet_core::bip32_path_for(
@@ -134,8 +134,8 @@ impl App {
                         }
 
                         #[cfg(not(feature = "ledger"))]
-                        if wallet.is_ledger() {
-                            anyhow::bail!("Ledger support not compiled in.");
+                        if wallet.is_hardware() {
+                            anyhow::bail!("Hardware wallet support not compiled in.");
                         }
 
                         WalletInfo::from_wallet(&wallet)
@@ -279,9 +279,9 @@ impl App {
                 Task::none()
             }
 
-            // -- Ledger --
-            #[cfg(feature = "ledger")]
-            Message::LedgerConnect => {
+            // -- Hardware wallet --
+            #[cfg(feature = "hardware-wallets")]
+            Message::HardwareConnect => {
                 if let Some(err) = self.validate_create_form() {
                     self.error_message = Some(err);
                     return Task::none();
@@ -304,30 +304,38 @@ impl App {
 
                 Task::perform(
                     async move {
-                        use iota_wallet_core::ledger_signer::connect_with_verification;
-                        use iota_wallet_core::Signer;
+                        #[cfg(feature = "ledger")]
+                        {
+                            use iota_wallet_core::ledger_signer::connect_with_verification;
+                            use iota_wallet_core::Signer;
 
-                        let bip32_path = iota_wallet_core::bip32_path_for(config.network, 0);
+                            let bip32_path = iota_wallet_core::bip32_path_for(config.network, 0);
 
-                        let signer = tokio::task::spawn_blocking(move || {
-                            connect_with_verification(bip32_path)
-                        })
-                        .await
-                        .map_err(|e| anyhow::anyhow!("Task failed: {e}"))??;
+                            let signer = tokio::task::spawn_blocking(move || {
+                                connect_with_verification(bip32_path)
+                            })
+                            .await
+                            .map_err(|e| anyhow::anyhow!("Task failed: {e}"))??;
 
-                        let address = *signer.address();
-                        std::fs::create_dir_all(path.parent().expect("wallet path has parent"))?;
-                        let wallet = Wallet::create_ledger(path, &pw, address, config)?;
-                        WalletInfo::from_wallet_with_signer(&wallet, Arc::new(signer))
+                            let address = *signer.address();
+                            std::fs::create_dir_all(path.parent().expect("wallet path has parent"))?;
+                            let wallet = Wallet::create_hardware(path, &pw, address, config, iota_wallet_core::HardwareKind::Ledger)?;
+                            return WalletInfo::from_wallet_with_signer(&wallet, Arc::new(signer));
+                        }
+
+                        #[cfg(not(feature = "ledger"))]
+                        {
+                            anyhow::bail!("No hardware wallet driver compiled in.");
+                        }
                     },
                     |r: Result<WalletInfo, anyhow::Error>| {
-                        Message::LedgerConnected(r.map_err(|e| e.to_string()))
+                        Message::HardwareConnected(r.map_err(|e| e.to_string()))
                     },
                 )
             }
 
-            #[cfg(feature = "ledger")]
-            Message::LedgerConnected(result) => {
+            #[cfg(feature = "hardware-wallets")]
+            Message::HardwareConnected(result) => {
                 self.loading = self.loading.saturating_sub(1);
                 match result {
                     Ok(info) => {
@@ -343,9 +351,9 @@ impl App {
                 Task::none()
             }
 
-            // -- Ledger verify address --
-            #[cfg(feature = "ledger")]
-            Message::LedgerVerifyAddress => {
+            // -- Hardware wallet verify address --
+            #[cfg(feature = "hardware-wallets")]
+            Message::HardwareVerifyAddress => {
                 let Some(info) = &self.wallet_info else {
                     return Task::none();
                 };
@@ -361,13 +369,13 @@ impl App {
                             .map_err(|e| anyhow::anyhow!("Task failed: {e}"))?
                     },
                     |r: Result<(), anyhow::Error>| {
-                        Message::LedgerVerifyAddressCompleted(r.map_err(|e| e.to_string()))
+                        Message::HardwareVerifyAddressCompleted(r.map_err(|e| e.to_string()))
                     },
                 )
             }
 
-            #[cfg(feature = "ledger")]
-            Message::LedgerVerifyAddressCompleted(result) => {
+            #[cfg(feature = "hardware-wallets")]
+            Message::HardwareVerifyAddressCompleted(result) => {
                 self.loading = self.loading.saturating_sub(1);
                 match result {
                     Ok(()) => {
@@ -378,9 +386,9 @@ impl App {
                 Task::none()
             }
 
-            // -- Ledger reconnect --
-            #[cfg(feature = "ledger")]
-            Message::LedgerReconnect => {
+            // -- Hardware wallet reconnect --
+            #[cfg(feature = "hardware-wallets")]
+            Message::HardwareReconnect => {
                 let Some(info) = &self.wallet_info else {
                     return Task::none();
                 };
@@ -396,18 +404,18 @@ impl App {
                             .map_err(|e| anyhow::anyhow!("Task failed: {e}"))?
                     },
                     |r: Result<(), anyhow::Error>| {
-                        Message::LedgerReconnected(r.map_err(|e| e.to_string()))
+                        Message::HardwareReconnected(r.map_err(|e| e.to_string()))
                     },
                 )
             }
 
-            #[cfg(feature = "ledger")]
-            Message::LedgerReconnected(result) => {
+            #[cfg(feature = "hardware-wallets")]
+            Message::HardwareReconnected(result) => {
                 self.loading = self.loading.saturating_sub(1);
                 match result {
                     Ok(()) => {
                         self.error_message = None;
-                        self.status_message = Some("Ledger reconnected".into());
+                        self.status_message = Some("Device reconnected".into());
                     }
                     Err(e) => self.error_message = Some(e),
                 }
@@ -891,7 +899,7 @@ impl App {
                 let name = self.selected_wallet.clone().unwrap_or_default();
                 let path = self.wallet_dir.join(format!("{name}.wallet"));
                 let pw = self.session_password.clone();
-                let is_ledger = self.wallet_info.as_ref().map(|i| i.is_ledger).unwrap_or(false);
+                let is_hardware = self.wallet_info.as_ref().map(|i| i.is_hardware).unwrap_or(false);
                 self.loading += 1;
                 self.error_message = None;
 
@@ -901,7 +909,7 @@ impl App {
                         wallet.switch_account(index)?;
 
                         #[cfg(feature = "ledger")]
-                        if is_ledger {
+                        if is_hardware {
                             use iota_wallet_core::ledger_signer::connect_with_verification;
                             use iota_wallet_core::Signer;
                             let bip32_path = iota_wallet_core::bip32_path_for(
@@ -921,8 +929,8 @@ impl App {
                         }
 
                         #[cfg(not(feature = "ledger"))]
-                        if is_ledger {
-                            anyhow::bail!("Ledger support not compiled in.");
+                        if is_hardware {
+                            anyhow::bail!("Hardware wallet support not compiled in.");
                         }
 
                         wallet.save(&pw)?;

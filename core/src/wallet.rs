@@ -10,13 +10,29 @@ use zeroize::{Zeroize, Zeroizing};
 use crate::signer::SoftwareSigner;
 use crate::wallet_file;
 
-/// Whether the wallet is backed by a software mnemonic or a Ledger hardware device.
+/// The kind of hardware wallet device.
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum HardwareKind {
+    Ledger,
+}
+
+impl std::fmt::Display for HardwareKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HardwareKind::Ledger => write!(f, "Ledger"),
+        }
+    }
+}
+
+/// Whether the wallet is backed by a software mnemonic or a hardware device.
 #[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum WalletType {
     #[default]
     Software,
-    Ledger,
+    #[serde(alias = "ledger")]
+    Hardware(HardwareKind),
 }
 
 /// Per-account metadata stored alongside the wallet.
@@ -40,7 +56,7 @@ pub struct WalletData {
     pub accounts: Vec<AccountRecord>,
     #[serde(default)]
     pub wallet_type: WalletType,
-    /// Stored address for Ledger wallets (to verify on reconnect).
+    /// Stored address for hardware wallets (to verify on reconnect).
     #[serde(default)]
     pub address: Option<String>,
 }
@@ -131,7 +147,7 @@ fn persist_wallet_to_file(
 /// In-memory wallet with derived key material.
 pub struct Wallet {
     data: WalletData,
-    /// `None` for Ledger wallets — signing happens on the device.
+    /// `None` for hardware wallets — signing happens on the device.
     private_key: Option<Ed25519PrivateKey>,
     address: Address,
     path: PathBuf,
@@ -188,9 +204,9 @@ impl Wallet {
                     path: path.to_path_buf(),
                 })
             }
-            WalletType::Ledger => {
+            WalletType::Hardware(_) => {
                 let address = data.address.as_deref()
-                    .ok_or_else(|| anyhow::anyhow!("Ledger wallet is missing its stored address."))?;
+                    .ok_or_else(|| anyhow::anyhow!("Hardware wallet is missing its stored address."))?;
                 let address = address.parse::<Address>()
                     .map_err(|e| anyhow::anyhow!("Invalid stored address: {e}"))?;
                 Ok(Self {
@@ -231,19 +247,20 @@ impl Wallet {
         })
     }
 
-    /// Create a new Ledger wallet file. The address comes from the connected device.
-    pub fn create_ledger(
+    /// Create a new hardware wallet file. The address comes from the connected device.
+    pub fn create_hardware(
         path: PathBuf,
         password: &[u8],
         address: Address,
         network_config: NetworkConfig,
+        hardware_kind: HardwareKind,
     ) -> Result<Self> {
         let data = WalletData {
             mnemonic: None,
             network_config,
             active_account_index: 0,
             accounts: vec![AccountRecord { index: 0, last_balance: None }],
-            wallet_type: WalletType::Ledger,
+            wallet_type: WalletType::Hardware(hardware_kind),
             address: Some(address.to_string()),
         };
 
@@ -284,7 +301,7 @@ impl Wallet {
     /// Switch to a different account index. Re-derives the keypair and address.
     /// Does NOT save — caller decides whether to persist.
     ///
-    /// For Ledger wallets this only updates the index — the caller must reconnect
+    /// For hardware wallets this only updates the index — the caller must reconnect
     /// the device with the new derivation path and call `set_address()`.
     pub fn switch_account(&mut self, index: u64) -> Result<()> {
         match self.data.wallet_type {
@@ -295,7 +312,7 @@ impl Wallet {
                 self.private_key = Some(private_key);
                 self.address = address;
             }
-            WalletType::Ledger => {
+            WalletType::Hardware(_) => {
                 // Index update only — caller reconnects the device
             }
         }
@@ -316,7 +333,7 @@ impl Wallet {
     /// Only available for software wallets.
     pub fn derive_address_for(&self, index: u64) -> Result<Address> {
         let mnemonic = self.data.mnemonic.as_deref()
-            .ok_or_else(|| anyhow::anyhow!("Cannot derive addresses for a Ledger wallet."))?;
+            .ok_or_else(|| anyhow::anyhow!("Cannot derive addresses for a hardware wallet."))?;
         let (_, address) = derive_key(mnemonic, index)?;
         Ok(address)
     }
@@ -325,7 +342,7 @@ impl Wallet {
         &self.address
     }
 
-    /// Update the address (used after Ledger reconnect with a new derivation path).
+    /// Update the address (used after hardware wallet reconnect with a new derivation path).
     pub fn set_address(&mut self, address: Address) {
         self.data.address = Some(address.to_string());
         self.address = address;
@@ -341,10 +358,10 @@ impl Wallet {
         }
     }
 
-    /// Build a software signer. Returns an error if called on a Ledger wallet.
+    /// Build a software signer. Returns an error if called on a hardware wallet.
     pub fn signer(&self) -> Result<SoftwareSigner> {
         let key = self.private_key.clone().ok_or_else(|| {
-            anyhow::anyhow!("Cannot build software signer for a Ledger wallet. Use LedgerSigner instead.")
+            anyhow::anyhow!("Cannot build software signer for a hardware wallet.")
         })?;
         Ok(SoftwareSigner::new(key))
     }
@@ -357,8 +374,15 @@ impl Wallet {
         &self.data.wallet_type
     }
 
-    pub fn is_ledger(&self) -> bool {
-        self.data.wallet_type == WalletType::Ledger
+    pub fn is_hardware(&self) -> bool {
+        matches!(self.data.wallet_type, WalletType::Hardware(_))
+    }
+
+    pub fn hardware_kind(&self) -> Option<HardwareKind> {
+        match self.data.wallet_type {
+            WalletType::Hardware(kind) => Some(kind),
+            _ => None,
+        }
     }
 
     pub fn network_config(&self) -> &NetworkConfig {

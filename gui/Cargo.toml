@@ -12,7 +12,8 @@ path = "src/main.rs"
 
 [features]
 default = ["ledger"]
-ledger = ["iota-wallet-core/ledger"]
+hardware-wallets = ["iota-wallet-core/hardware-wallets"]
+ledger = ["hardware-wallets", "iota-wallet-core/ledger"]
 
 [dependencies]
 iota-wallet-core = { path = "../core" }

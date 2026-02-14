@@ -1,8 +1,8 @@
 mod account;
 mod create;
 mod history;
-#[cfg(feature = "ledger")]
-mod ledger;
+#[cfg(feature = "hardware-wallets")]
+mod hardware;
 mod nfts;
 mod open;
 mod receive;

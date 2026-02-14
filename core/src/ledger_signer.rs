@@ -90,7 +90,7 @@ pub fn connect_and_verify(
     let signer = LedgerSigner::connect(path)?;
     if signer.address() != stored_address {
         anyhow::bail!(
-            "Ledger address mismatch. Device: {} Stored: {}. Wrong device or account?",
+            "Address mismatch. Device: {} Stored: {}. Wrong device or account?",
             signer.address(),
             stored_address
         );

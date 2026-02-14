@@ -351,8 +351,8 @@ impl Command {
             }
 
             Command::Seed => {
-                if wallet.is_ledger() {
-                    bail!("Seed phrase is not available for Ledger wallets.");
+                if wallet.is_hardware() {
+                    bail!("Seed phrase is not available for hardware wallets.");
                 }
                 let mnemonic = wallet.mnemonic()
                     .ok_or_else(|| anyhow::anyhow!("No mnemonic available."))?;
@@ -374,13 +374,13 @@ impl Command {
                     None => {
                         let idx = wallet.account_index();
                         let addr = wallet.address().to_string();
-                        let is_ledger = wallet.is_ledger();
+                        let is_hardware = wallet.is_hardware();
                         if json_output {
                             let known: Vec<serde_json::Value> = wallet
                                 .known_accounts()
                                 .iter()
                                 .map(|a| {
-                                    let a_addr = if is_ledger {
+                                    let a_addr = if is_hardware {
                                         if a.index == idx { addr.clone() } else { "?".to_string() }
                                     } else {
                                         wallet
@@ -402,13 +402,16 @@ impl Command {
                             })
                             .to_string())
                         } else {
-                            let type_label = if is_ledger { " (Ledger)" } else { "" };
+                            let type_label = match wallet.hardware_kind() {
+                                Some(kind) => format!(" ({kind})"),
+                                None => String::new(),
+                            };
                             let mut out = format!("Account #{idx}{type_label}\n  {addr}\n");
                             let known = wallet.known_accounts();
                             if !known.is_empty() {
                                 out.push_str("\nKnown accounts:\n");
                                 for a in known {
-                                    let a_addr = if is_ledger {
+                                    let a_addr = if is_hardware {
                                         if a.index == idx { addr.clone() } else { "?".to_string() }
                                     } else {
                                         wallet

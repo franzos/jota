@@ -51,13 +51,13 @@ impl App {
             let mut error_row = row![text(err.as_str()).size(13).color(styles::DANGER)]
                 .spacing(8)
                 .align_y(iced::Alignment::Center);
-            #[cfg(feature = "ledger")]
-            if info.is_ledger && self.loading == 0 {
+            #[cfg(feature = "hardware-wallets")]
+            if info.is_hardware && self.loading == 0 {
                 error_row = error_row.push(
-                    button(text("Reconnect Ledger").size(12))
+                    button(text("Reconnect Device").size(12))
                         .padding([4, 10])
                         .style(styles::btn_secondary)
-                        .on_press(Message::LedgerReconnect),
+                        .on_press(Message::HardwareReconnect),
                 );
             }
             col = col.push(error_row);

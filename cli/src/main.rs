@@ -239,18 +239,22 @@ async fn run_oneshot(cli: &Cli, cmd_str: &str) -> Result<()> {
 
 /// Build the appropriate signer based on wallet type.
 fn build_signer(wallet: &Wallet, _cli: &Cli) -> Result<Arc<dyn iota_wallet_core::Signer>> {
-    #[cfg(feature = "ledger")]
-    if wallet.is_ledger() {
-        use iota_wallet_core::ledger_signer::connect_and_verify;
+    if wallet.is_hardware() {
+        #[cfg(feature = "ledger")]
+        {
+            use iota_wallet_core::ledger_signer::connect_and_verify;
 
-        let path = iota_wallet_core::bip32_path_for(
-            wallet.network_config().network,
-            wallet.account_index() as u32,
-        );
+            let path = iota_wallet_core::bip32_path_for(
+                wallet.network_config().network,
+                wallet.account_index() as u32,
+            );
 
-        println!("Connecting to Ledger device...");
-        let ledger_signer = connect_and_verify(path, wallet.address())?;
-        return Ok(Arc::new(ledger_signer));
+            println!("Connecting to hardware wallet...");
+            let ledger_signer = connect_and_verify(path, wallet.address())?;
+            return Ok(Arc::new(ledger_signer));
+        }
+        #[cfg(not(feature = "ledger"))]
+        anyhow::bail!("Hardware wallet support not compiled in.");
     }
 
     Ok(Arc::new(wallet.signer()?))

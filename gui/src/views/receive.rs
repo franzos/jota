@@ -31,13 +31,13 @@ impl App {
             .style(styles::btn_primary)
             .on_press(Message::CopyAddress);
 
-        #[cfg(feature = "ledger")]
-        let verify_on_device = if info.is_ledger {
+        #[cfg(feature = "hardware-wallets")]
+        let verify_on_device = if info.is_hardware {
             Some(
                 button(text("Verify on Device").size(14))
                     .padding([10, 20])
                     .style(styles::btn_secondary)
-                    .on_press(Message::LedgerVerifyAddress),
+                    .on_press(Message::HardwareVerifyAddress),
             )
         } else {
             None
@@ -52,7 +52,7 @@ impl App {
         }
 
         let mut btn_row = row![copy].spacing(8);
-        #[cfg(feature = "ledger")]
+        #[cfg(feature = "hardware-wallets")]
         if let Some(verify_btn) = verify_on_device {
             btn_row = btn_row.push(verify_btn);
         }

@@ -6,8 +6,8 @@ use iced::Element;
 use zeroize::Zeroizing;
 
 impl App {
-    pub(crate) fn view_ledger_connect(&self) -> Element<Message> {
-        let title = text("Connect Ledger").size(20);
+    pub(crate) fn view_hardware_connect(&self) -> Element<Message> {
+        let title = text("Connect Hardware Wallet").size(20);
         let back = button(text("Back").size(12))
             .padding([6, 14])
             .style(styles::btn_ghost)
@@ -29,7 +29,7 @@ impl App {
             .padding([10, 24])
             .style(styles::btn_primary);
         if ready {
-            connect_btn = connect_btn.on_press(Message::LedgerConnect);
+            connect_btn = connect_btn.on_press(Message::HardwareConnect);
         }
 
         let mut col = column![
@@ -56,12 +56,12 @@ impl App {
         }
 
         col = col.push(Space::new().height(8));
-        col = col.push(text("Make sure the IOTA app is open on your Ledger.").size(12).color(MUTED));
+        col = col.push(text("Make sure the wallet app is open on your device.").size(12).color(MUTED));
         col = col.push(Space::new().height(8));
         col = col.push(connect_btn);
 
         if self.loading > 0 {
-            col = col.push(text("Connecting to Ledger...").size(13).color(MUTED));
+            col = col.push(text("Connecting to device...").size(13).color(MUTED));
         }
         if let Some(err) = &self.error_message {
             col = col.push(text(err.as_str()).size(13).color(styles::DANGER));

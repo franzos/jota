@@ -56,14 +56,14 @@ impl App {
     }
 
     fn view_sign_mode(&self) -> Element<Message> {
-        let is_ledger = self.wallet_info.as_ref().map(|i| i.is_ledger).unwrap_or(false);
+        let is_hardware = self.wallet_info.as_ref().map(|i| i.is_hardware).unwrap_or(false);
 
         let input = text_input("Message to sign", &self.sign_message_input)
             .on_input(Message::SignMessageInputChanged)
             .on_submit(Message::ConfirmSign);
 
         let msg_len = self.sign_message_input.len();
-        let too_long = is_ledger && msg_len > 2048;
+        let too_long = is_hardware && msg_len > 2048;
 
         let mut sign_btn = button(text("Sign Message").size(14))
             .padding([10, 24])
@@ -78,7 +78,7 @@ impl App {
         ]
         .spacing(4);
 
-        if is_ledger {
+        if is_hardware {
             let color = if too_long { styles::DANGER } else { MUTED };
             form = form.push(
                 text(format!(

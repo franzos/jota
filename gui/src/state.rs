@@ -15,8 +15,8 @@ pub(crate) enum Screen {
     Unlock,
     Create,
     Recover,
-    #[cfg(feature = "ledger")]
-    LedgerConnect,
+    #[cfg(feature = "hardware-wallets")]
+    HardwareConnect,
     // Main phase (wallet loaded)
     Account,
     Send,
@@ -44,7 +44,8 @@ pub(crate) struct WalletInfo {
     pub(crate) network_config: NetworkConfig,
     pub(crate) service: Arc<WalletService>,
     pub(crate) is_mainnet: bool,
-    pub(crate) is_ledger: bool,
+    pub(crate) is_hardware: bool,
+    pub(crate) hardware_kind: Option<iota_wallet_core::HardwareKind>,
     pub(crate) account_index: u64,
     pub(crate) known_accounts: Vec<AccountRecord>,
     /// Explicitly configured package (env var), not the resolved testnet default.
@@ -92,7 +93,8 @@ impl WalletInfo {
             network_config: wallet.network_config().clone(),
             service: Arc::new(service),
             is_mainnet: wallet.is_mainnet(),
-            is_ledger: wallet.is_ledger(),
+            is_hardware: wallet.is_hardware(),
+            hardware_kind: wallet.hardware_kind(),
             account_index: wallet.account_index(),
             known_accounts: wallet.known_accounts().to_vec(),
             notarization_package_config: notarization_package,

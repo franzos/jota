@@ -10,7 +10,7 @@ use iota_sdk::types::{
 
 pub trait Signer: Send + Sync {
     /// Sign a fully-built transaction and return the user signature.
-    /// `objects` provides coin/object metadata for Ledger clear signing.
+    /// `objects` provides coin/object metadata for hardware clear signing.
     fn sign_transaction(&self, tx: &Transaction, objects: &[Object]) -> Result<UserSignature>;
 
     /// Sign an arbitrary message and return the signed result.
@@ -20,12 +20,12 @@ pub trait Signer: Send + Sync {
     fn address(&self) -> &Address;
 
     /// Show the address on a hardware device for user verification.
-    /// Only supported by hardware signers (e.g. Ledger).
+    /// Only supported by hardware signers.
     fn verify_address(&self) -> Result<()> {
         anyhow::bail!("Address verification is only supported on hardware devices.")
     }
 
-    /// Reconnect to the signing device (e.g. after a Ledger was unplugged or locked).
+    /// Reconnect to the signing device (e.g. after it was unplugged or locked).
     /// Software signers are always connected, so the default is a no-op.
     fn reconnect(&self) -> Result<()> {
         Ok(())

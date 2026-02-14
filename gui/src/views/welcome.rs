@@ -3,7 +3,7 @@ use crate::state::Screen;
 use crate::{styles, App, MUTED};
 use iced::widget::{button, column, row, svg, text, Space};
 use iced::{Element, Fill, Length};
-use iota_wallet_core::wallet::{Network, WalletType};
+use iota_wallet_core::wallet::{Network, WalletType, HardwareKind};
 
 impl App {
     pub(crate) fn view_wallet_select(&self) -> Element<Message> {
@@ -41,7 +41,7 @@ impl App {
             for entry in &self.wallet_entries {
                 let n = entry.name.clone();
                 let label = match entry.wallet_type {
-                    WalletType::Ledger => format!("{} (Ledger)", entry.name),
+                    WalletType::Hardware(kind) => format!("{} ({kind})", entry.name),
                     WalletType::Software => entry.name.clone(),
                 };
                 col = col.push(
@@ -69,13 +69,13 @@ impl App {
         ]
         .spacing(10);
 
-        #[cfg(feature = "ledger")]
+        #[cfg(feature = "hardware-wallets")]
         {
             action_row = action_row.push(
-                button(text("Connect Ledger").size(14))
+                button(text("Connect Hardware Wallet").size(14))
                     .padding([10, 20])
                     .style(styles::btn_secondary)
-                    .on_press(Message::GoTo(Screen::LedgerConnect)),
+                    .on_press(Message::GoTo(Screen::HardwareConnect)),
             );
         }
 

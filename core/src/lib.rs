@@ -24,7 +24,7 @@ pub mod wallet;
 pub mod wallet_file;
 
 pub use cache::TransactionCache;
-pub use wallet::{AccountRecord, Wallet, WalletType};
+pub use wallet::{AccountRecord, HardwareKind, Wallet, WalletType};
 pub use network::NetworkClient;
 pub use commands::Command;
 pub use recipient::{Recipient, ResolvedRecipient};
@@ -83,7 +83,9 @@ pub fn list_wallets(dir: &std::path::Path) -> Vec<WalletEntry> {
 pub fn write_wallet_meta(wallet_path: &std::path::Path, wallet_type: WalletType) {
     let meta_path = wallet_path.with_extension("meta");
     let type_str = match wallet_type {
-        WalletType::Ledger => "ledger",
+        WalletType::Hardware(kind) => match kind {
+            wallet::HardwareKind::Ledger => "hardware:ledger",
+        },
         WalletType::Software => "software",
     };
     let _ = std::fs::write(&meta_path, type_str);
@@ -93,7 +95,7 @@ fn read_wallet_meta(path: &std::path::Path) -> WalletType {
     std::fs::read_to_string(path)
         .ok()
         .and_then(|s| match s.trim() {
-            "ledger" => Some(WalletType::Ledger),
+            "ledger" | "hardware:ledger" => Some(WalletType::Hardware(wallet::HardwareKind::Ledger)),
             _ => Some(WalletType::Software),
         })
         .unwrap_or(WalletType::Software)
