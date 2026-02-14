@@ -38,12 +38,16 @@ impl NetworkClient {
             }
         }
 
-        let mut objects = Vec::new();
-        for (id, version) in ids {
-            if let Some(obj) = self.client.object(id, version).await? {
-                objects.push(obj);
-            }
-        }
+        let futs = ids
+            .into_iter()
+            .map(|(id, version)| self.client.object(id, version));
+        let results = futures::future::join_all(futs).await;
+        let objects: Vec<Object> = results
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect();
         Ok(objects)
     }
 

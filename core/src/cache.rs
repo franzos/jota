@@ -79,8 +79,8 @@ impl TransactionCache {
                 direction       TEXT,
                 sender          TEXT,
                 recipient       TEXT,
-                amount          INTEGER,
-                fee             INTEGER,
+                amount          TEXT,
+                fee             TEXT,
                 epoch           INTEGER NOT NULL,
                 lamport_version INTEGER NOT NULL,
                 checkpoint      INTEGER,
@@ -156,8 +156,8 @@ impl TransactionCache {
                     dir,
                     tx_summary.sender,
                     Option::<String>::None, // recipient — populated later if needed
-                    tx_summary.amount.map(|a| a as i64),
-                    tx_summary.fee.map(|f| f as i64),
+                    tx_summary.amount.map(|a| a.to_string()),
+                    tx_summary.fee.map(|f| f.to_string()),
                     tx_summary.epoch as i64,
                     tx_summary.lamport_version as i64,
                 ])
@@ -212,8 +212,8 @@ impl TransactionCache {
                     "out" => TransactionDirection::Out,
                     _ => TransactionDirection::In,
                 });
-                let amount: Option<i64> = row.get(3)?;
-                let fee: Option<i64> = row.get(4)?;
+                let amount: Option<String> = row.get(3)?;
+                let fee: Option<String> = row.get(4)?;
                 let epoch: i64 = row.get(5)?;
                 let lamport: i64 = row.get(6)?;
                 let timestamp: Option<i64> = row.get(7)?;
@@ -223,8 +223,8 @@ impl TransactionCache {
                     direction,
                     timestamp: timestamp.map(|t| t.to_string()),
                     sender: row.get(2)?,
-                    amount: amount.map(|a| a as u64),
-                    fee: fee.map(|f| f as u64),
+                    amount: amount.and_then(|a| a.parse::<u64>().ok()),
+                    fee: fee.and_then(|f| f.parse::<u64>().ok()),
                     epoch: epoch as u64,
                     lamport_version: lamport as u64,
                 })
@@ -252,8 +252,8 @@ impl TransactionCache {
     pub fn query_epoch_deltas(&self, network: &str, address: &str) -> Result<Vec<(u64, i64)>> {
         let mut stmt = self.conn.prepare(
             "SELECT epoch,
-                    SUM(CASE WHEN direction = 'in' THEN COALESCE(amount, 0) ELSE 0 END)
-                  - SUM(CASE WHEN direction = 'out' THEN COALESCE(amount, 0) + COALESCE(fee, 0) ELSE 0 END)
+                    SUM(CASE WHEN direction = 'in' THEN COALESCE(CAST(amount AS INTEGER), 0) ELSE 0 END)
+                  - SUM(CASE WHEN direction = 'out' THEN COALESCE(CAST(amount AS INTEGER), 0) + COALESCE(CAST(fee AS INTEGER), 0) ELSE 0 END)
              FROM transactions
              WHERE network = ?1 AND address = ?2
              GROUP BY epoch

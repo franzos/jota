@@ -83,7 +83,10 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                 println!();
                 println!("New wallet created in {}", wallet_path.display());
                 println!("IMPORTANT: Write down your seed phrase and keep it safe:");
-                println!("  {}", w.mnemonic().unwrap());
+                match w.mnemonic() {
+                    Some(mnemonic) => println!("  {}", mnemonic),
+                    None => println!("  Mnemonic not available for hardware wallets."),
+                }
                 println!();
                 w
             }

@@ -139,7 +139,7 @@ fn ensure_account_in_list(accounts: &mut Vec<AccountRecord>, index: u64) {
 fn persist_wallet_to_file(path: &Path, data: &WalletData, password: &[u8]) -> Result<()> {
     let json = Zeroizing::new(serde_json::to_vec(data).context("Failed to serialize wallet data")?);
     wallet_file::save_to_file(path, &json, password).context("Failed to save wallet file")?;
-    crate::write_wallet_meta(path, data.wallet_type);
+    crate::write_wallet_meta(path, data.wallet_type)?;
     Ok(())
 }
 

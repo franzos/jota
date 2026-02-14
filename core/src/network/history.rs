@@ -23,24 +23,22 @@ impl NetworkClient {
         address: &iota_sdk::types::Address,
         filter: TransactionFilter,
     ) -> Result<Vec<TransactionSummary>> {
-        let sent = self
-            .query_transactions(
+        let (sent, recv) = futures::try_join!(
+            self.query_transactions(
                 TransactionsFilter {
                     sign_address: Some(*address),
                     ..Default::default()
                 },
                 TransactionDirection::Out,
-            )
-            .await?;
-        let recv = self
-            .query_transactions(
+            ),
+            self.query_transactions(
                 TransactionsFilter {
                     recv_address: Some(*address),
                     ..Default::default()
                 },
                 TransactionDirection::In,
-            )
-            .await?;
+            ),
+        )?;
 
         // Merge: sent takes priority (a tx you signed is "out" even if you also received change)
         let seen: HashSet<String> = sent.iter().map(|t| t.digest.clone()).collect();
@@ -118,8 +116,8 @@ impl NetworkClient {
 
         let min_epoch = current_epoch.saturating_sub(7);
 
-        let sent = self
-            .fetch_paginated(
+        let (sent, recv) = futures::try_join!(
+            self.fetch_paginated(
                 TransactionsFilter {
                     sign_address: Some(*address),
                     ..Default::default()
@@ -127,11 +125,8 @@ impl NetworkClient {
                 TransactionDirection::Out,
                 &known,
                 min_epoch,
-            )
-            .await?;
-
-        let recv = self
-            .fetch_paginated(
+            ),
+            self.fetch_paginated(
                 TransactionsFilter {
                     recv_address: Some(*address),
                     ..Default::default()
@@ -139,8 +134,8 @@ impl NetworkClient {
                 TransactionDirection::In,
                 &known,
                 min_epoch,
-            )
-            .await?;
+            ),
+        )?;
 
         // Phase 3: write results to cache (sync, reopen)
         let cache = TransactionCache::open()?;

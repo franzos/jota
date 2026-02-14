@@ -58,16 +58,12 @@ impl App {
 
             let (received, sent) = match tx.direction {
                 Some(TransactionDirection::In) => (
-                    tx.amount
-                        .map(nanos_to_iota)
-                        .unwrap_or_else(|| "-".into()),
+                    tx.amount.map(nanos_to_iota).unwrap_or_else(|| "-".into()),
                     "-".into(),
                 ),
                 Some(TransactionDirection::Out) => (
                     "-".into(),
-                    tx.amount
-                        .map(nanos_to_iota)
-                        .unwrap_or_else(|| "-".into()),
+                    tx.amount.map(nanos_to_iota).unwrap_or_else(|| "-".into()),
                 ),
                 None => ("-".into(), "-".into()),
             };

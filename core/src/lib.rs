@@ -1,3 +1,5 @@
+use anyhow::Context;
+
 pub mod cache;
 pub mod commands;
 pub mod display;
@@ -76,7 +78,10 @@ pub fn list_wallets(dir: &std::path::Path) -> Vec<WalletEntry> {
 }
 
 /// Write wallet type metadata to an unencrypted sidecar file.
-pub fn write_wallet_meta(wallet_path: &std::path::Path, wallet_type: WalletType) {
+pub fn write_wallet_meta(
+    wallet_path: &std::path::Path,
+    wallet_type: WalletType,
+) -> anyhow::Result<()> {
     let meta_path = wallet_path.with_extension("meta");
     let type_str = match wallet_type {
         WalletType::Hardware(kind) => match kind {
@@ -84,16 +89,16 @@ pub fn write_wallet_meta(wallet_path: &std::path::Path, wallet_type: WalletType)
         },
         WalletType::Software => "software",
     };
-    let _ = std::fs::write(&meta_path, type_str);
+    std::fs::write(&meta_path, type_str)
+        .with_context(|| format!("Failed to write wallet meta to {}", meta_path.display()))?;
+    Ok(())
 }
 
 fn read_wallet_meta(path: &std::path::Path) -> WalletType {
     std::fs::read_to_string(path)
         .ok()
         .map(|s| match s.trim() {
-            "ledger" | "hardware:ledger" => {
-                WalletType::Hardware(wallet::HardwareKind::Ledger)
-            }
+            "ledger" | "hardware:ledger" => WalletType::Hardware(wallet::HardwareKind::Ledger),
             _ => WalletType::Software,
         })
         .unwrap_or(WalletType::Software)
