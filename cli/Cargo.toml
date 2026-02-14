@@ -12,7 +12,7 @@ name = "iota-wallet"
 path = "src/main.rs"
 
 [features]
-default = []
+default = ["ledger"]
 ledger = ["iota-wallet-core/ledger"]
 
 [dependencies]

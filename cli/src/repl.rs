@@ -68,6 +68,11 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
             }
         }
 
+        #[cfg(not(feature = "ledger"))]
+        if w.is_ledger() {
+            anyhow::bail!("Ledger support not compiled in.");
+        }
+
         let pw_bytes = Zeroizing::new(password.as_bytes().to_vec());
         (w, pw_bytes)
     } else {
@@ -448,6 +453,11 @@ fn build_repl_signer(wallet: &Wallet, _cli: &Cli) -> Result<Arc<dyn iota_wallet_
         );
         let signer = LedgerSigner::connect(path)?;
         return Ok(Arc::new(signer));
+    }
+
+    #[cfg(not(feature = "ledger"))]
+    if wallet.is_ledger() {
+        anyhow::bail!("Ledger support not compiled in.");
     }
 
     Ok(Arc::new(wallet.signer()?))

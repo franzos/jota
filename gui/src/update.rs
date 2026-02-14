@@ -141,6 +141,11 @@ impl App {
                             return WalletInfo::from_wallet_with_signer(&wallet, Arc::new(signer));
                         }
 
+                        #[cfg(not(feature = "ledger"))]
+                        if wallet.is_ledger() {
+                            anyhow::bail!("Ledger support not compiled in.");
+                        }
+
                         WalletInfo::from_wallet(&wallet)
                     },
                     |r: Result<WalletInfo, anyhow::Error>| {
