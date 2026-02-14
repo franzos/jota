@@ -27,8 +27,8 @@ impl App {
             .on_press(Message::SignModeChanged(SignMode::Notarize));
         let toggle_row = row![sign_btn, verify_btn, notarize_btn].spacing(4);
 
-        let header = row![title, Space::new().width(Fill), toggle_row]
-            .align_y(iced::Alignment::Center);
+        let header =
+            row![title, Space::new().width(Fill), toggle_row].align_y(iced::Alignment::Center);
 
         let form: Element<Message> = match self.sign_mode {
             SignMode::Sign => self.view_sign_mode(),
@@ -56,7 +56,11 @@ impl App {
     }
 
     fn view_sign_mode(&self) -> Element<Message> {
-        let is_hardware = self.wallet_info.as_ref().map(|i| i.is_hardware).unwrap_or(false);
+        let is_hardware = self
+            .wallet_info
+            .as_ref()
+            .map(|i| i.is_hardware)
+            .unwrap_or(false);
 
         let input = text_input("Message to sign", &self.sign_message_input)
             .on_input(Message::SignMessageInputChanged)
@@ -72,11 +76,7 @@ impl App {
             sign_btn = sign_btn.on_press(Message::ConfirmSign);
         }
 
-        let mut form = column![
-            text("Message").size(12).color(MUTED),
-            input,
-        ]
-        .spacing(4);
+        let mut form = column![text("Message").size(12).color(MUTED), input,].spacing(4);
 
         if is_hardware {
             let color = if too_long { styles::DANGER } else { MUTED };
@@ -89,9 +89,7 @@ impl App {
             );
         }
 
-        form = form
-            .push(Space::new().height(8))
-            .push(sign_btn);
+        form = form.push(Space::new().height(8)).push(sign_btn);
 
         // Show result card
         if let Some(signed) = &self.signed_result {
@@ -121,18 +119,24 @@ impl App {
                     Space::new().height(4),
                     text(format!("Message: {}", signed.message)).size(12),
                     row![
-                        text(format!("Signature: {sig_short}")).size(12).font(Font::MONOSPACE),
+                        text(format!("Signature: {sig_short}"))
+                            .size(12)
+                            .font(Font::MONOSPACE),
                         copy_sig,
                     ]
                     .spacing(8)
                     .align_y(iced::Alignment::Center),
                     row![
-                        text(format!("Public key: {pk_short}")).size(12).font(Font::MONOSPACE),
+                        text(format!("Public key: {pk_short}"))
+                            .size(12)
+                            .font(Font::MONOSPACE),
                         copy_pk,
                     ]
                     .spacing(8)
                     .align_y(iced::Alignment::Center),
-                    text(format!("Address: {}", signed.address)).size(12).font(Font::MONOSPACE),
+                    text(format!("Address: {}", signed.address))
+                        .size(12)
+                        .font(Font::MONOSPACE),
                 ]
                 .spacing(4),
             )
@@ -140,9 +144,7 @@ impl App {
             .width(Fill)
             .style(styles::card_flat);
 
-            form = form
-                .push(Space::new().height(12))
-                .push(result_card);
+            form = form.push(Space::new().height(12)).push(result_card);
         }
 
         form.into()
@@ -188,11 +190,9 @@ impl App {
             } else {
                 ("INVALID", styles::DANGER)
             };
-            let badge = container(
-                text(label).size(14).font(styles::BOLD).color(color),
-            )
-            .padding([8, 16])
-            .style(styles::card_flat);
+            let badge = container(text(label).size(14).font(styles::BOLD).color(color))
+                .padding([8, 16])
+                .style(styles::card_flat);
             form = form.push(Space::new().height(8)).push(badge);
         }
 
@@ -252,7 +252,9 @@ impl App {
                 column![
                     text("Notarized").size(14).font(styles::BOLD),
                     Space::new().height(4),
-                    text(format!("Digest: {digest}")).size(12).font(Font::MONOSPACE),
+                    text(format!("Digest: {digest}"))
+                        .size(12)
+                        .font(Font::MONOSPACE),
                     Space::new().height(4),
                     explorer_btn,
                 ]
@@ -261,9 +263,7 @@ impl App {
             .padding(16)
             .width(Fill)
             .style(styles::card_flat);
-            form = form
-                .push(Space::new().height(12))
-                .push(result_card);
+            form = form.push(Space::new().height(12)).push(result_card);
         }
 
         form.into()

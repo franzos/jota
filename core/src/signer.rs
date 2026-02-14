@@ -119,8 +119,7 @@ impl Signer for SoftwareSigner {
         };
 
         Ok(SignedMessage {
-            message: String::from_utf8(msg.to_vec())
-                .unwrap_or_else(|_| Base64::encode_string(msg)),
+            message: String::from_utf8(msg.to_vec()).unwrap_or_else(|_| Base64::encode_string(msg)),
             signature: Base64::encode_string(&sig_bytes),
             public_key: Base64::encode_string(&pk_bytes),
             address: self.address.to_string(),
@@ -162,7 +161,8 @@ mod tests {
         let signer = test_signer();
         let signed = signer.sign_message(b"hello world").unwrap();
 
-        let valid = verify_message(b"wrong message", &signed.signature, &signed.public_key).unwrap();
+        let valid =
+            verify_message(b"wrong message", &signed.signature, &signed.public_key).unwrap();
         assert!(!valid, "wrong message should fail verification");
     }
 

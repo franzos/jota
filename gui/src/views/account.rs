@@ -14,12 +14,10 @@ impl App {
 
         let title = text("Account").size(24);
 
-        let mut actions = row![
-            button(text("Refresh").size(13))
-                .padding([8, 16])
-                .style(styles::btn_secondary)
-                .on_press(Message::RefreshBalance),
-        ]
+        let mut actions = row![button(text("Refresh").size(13))
+            .padding([8, 16])
+            .style(styles::btn_secondary)
+            .on_press(Message::RefreshBalance),]
         .spacing(8);
 
         if !info.is_mainnet && info.network_config.network != Network::Custom {
@@ -32,8 +30,8 @@ impl App {
             actions = actions.push(faucet);
         }
 
-        let header = row![title, Space::new().width(Fill), actions]
-            .align_y(iced::Alignment::Center);
+        let header =
+            row![title, Space::new().width(Fill), actions].align_y(iced::Alignment::Center);
 
         let mut col = column![header].spacing(16);
 
@@ -82,28 +80,35 @@ impl App {
         }
 
         // Token balances card (non-IOTA tokens only)
-        let non_iota_tokens: Vec<_> = self.token_balances.iter()
+        let non_iota_tokens: Vec<_> = self
+            .token_balances
+            .iter()
             .filter(|b| b.coin_type != "0x2::iota::IOTA")
             .collect();
         if !non_iota_tokens.is_empty() {
-            let mut token_content = column![
-                text("Token Balances").size(16),
-            ]
-            .spacing(8);
+            let mut token_content = column![text("Token Balances").size(16),].spacing(8);
 
             for tb in &non_iota_tokens {
                 let meta = self.token_meta.iter().find(|m| m.coin_type == tb.coin_type);
-                let symbol = meta.map(|m| m.symbol.as_str())
+                let symbol = meta
+                    .map(|m| m.symbol.as_str())
                     .filter(|s| !s.is_empty())
                     .unwrap_or_else(|| tb.coin_type.split("::").last().unwrap_or(&tb.coin_type));
                 let balance_str = match meta {
                     Some(m) => format_balance_with_symbol(tb.total_balance, m.decimals, symbol),
                     None => format!("{} {}", tb.total_balance, symbol),
                 };
-                let objects = if tb.coin_object_count == 1 { "1 object" } else { &format!("{} objects", tb.coin_object_count) };
+                let objects = if tb.coin_object_count == 1 {
+                    "1 object"
+                } else {
+                    &format!("{} objects", tb.coin_object_count)
+                };
                 token_content = token_content.push(
                     row![
-                        text(symbol).size(14).font(styles::BOLD).width(Length::Fixed(100.0)),
+                        text(symbol)
+                            .size(14)
+                            .font(styles::BOLD)
+                            .width(Length::Fixed(100.0)),
                         text(balance_str).size(14),
                         text(format!("({})", objects)).size(12).color(MUTED),
                     ]
@@ -121,10 +126,7 @@ impl App {
         }
 
         // Recent transactions card
-        let mut tx_content = column![
-            text("Recent Transactions").size(16),
-        ]
-        .spacing(12);
+        let mut tx_content = column![text("Recent Transactions").size(16),].spacing(12);
 
         if self.account_transactions.is_empty() {
             tx_content = tx_content.push(text("No transactions yet.").size(14).color(MUTED));

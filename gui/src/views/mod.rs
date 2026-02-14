@@ -1,8 +1,8 @@
 mod account;
 mod create;
-mod history;
 #[cfg(feature = "hardware-wallets")]
 mod hardware;
+mod history;
 mod nfts;
 mod open;
 mod receive;

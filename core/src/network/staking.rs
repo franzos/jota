@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use iota_sdk::transaction_builder::TransactionBuilder;
 use iota_sdk::types::{Address, ObjectId};
 
-use super::NetworkClient;
 use super::types::{StakeStatus, StakedIotaSummary, TransferResult};
+use super::NetworkClient;
 use crate::signer::Signer;
 
 impl NetworkClient {
@@ -18,7 +18,10 @@ impl NetworkClient {
     ) -> Result<TransferResult> {
         let mut builder = TransactionBuilder::new(*sender).with_client(&self.client);
         builder.stake(amount, validator);
-        let tx = builder.finish().await.context("Failed to build stake transaction")?;
+        let tx = builder
+            .finish()
+            .await
+            .context("Failed to build stake transaction")?;
         self.sign_and_execute(&tx, signer).await
     }
 
@@ -31,7 +34,10 @@ impl NetworkClient {
     ) -> Result<TransferResult> {
         let mut builder = TransactionBuilder::new(*sender).with_client(&self.client);
         builder.unstake(staked_object_id);
-        let tx = builder.finish().await.context("Failed to build unstake transaction")?;
+        let tx = builder
+            .finish()
+            .await
+            .context("Failed to build unstake transaction")?;
         self.sign_and_execute(&tx, signer).await
     }
 
@@ -58,7 +64,9 @@ impl NetworkClient {
             }
         });
 
-        let data = self.execute_query(query, "Failed to query staked objects").await?;
+        let data = self
+            .execute_query(query, "Failed to query staked objects")
+            .await?;
         let empty = vec![];
         let nodes = data
             .get("address")

@@ -37,7 +37,10 @@ pub enum Command {
         raw_amount: String,
     },
     /// Sweep entire balance: sweep_all <address|name.iota> [token]
-    SweepAll { recipient: Recipient, token: Option<String> },
+    SweepAll {
+        recipient: Recipient,
+        token: Option<String>,
+    },
     /// Show transaction history: show_transfers [in|out|all]
     ShowTransfers { filter: TransactionFilter },
     /// Look up a transaction by digest: show_transfer <digest>
@@ -55,7 +58,10 @@ pub enum Command {
     /// List owned NFTs
     Nfts,
     /// Transfer an NFT: send_nft <object_id> <address|name.iota>
-    SendNft { object_id: ObjectId, recipient: Recipient },
+    SendNft {
+        object_id: ObjectId,
+        recipient: Recipient,
+    },
     /// Show network status: status [node_url]
     Status { node_url: Option<String> },
     /// Show seed phrase (mnemonic)
@@ -65,7 +71,11 @@ pub enum Command {
     /// Sign an arbitrary message with the wallet's key
     SignMessage { message: String },
     /// Verify a signed message: verify <message> <signature_b64> <public_key_b64>
-    VerifyMessage { message: String, signature: String, public_key: String },
+    VerifyMessage {
+        message: String,
+        signature: String,
+        public_key: String,
+    },
     /// Notarize a message on-chain: notarize <message>
     Notarize { message: String },
     /// Change wallet password
@@ -92,10 +102,7 @@ impl Command {
 
     /// Returns a confirmation prompt if this command should ask before executing.
     /// When a `ResolvedRecipient` is provided, shows the resolved name + address.
-    pub fn confirmation_prompt(
-        &self,
-        resolved: Option<&ResolvedRecipient>,
-    ) -> Option<String> {
+    pub fn confirmation_prompt(&self, resolved: Option<&ResolvedRecipient>) -> Option<String> {
         let display_recipient = |r: &Recipient| -> String {
             match resolved {
                 Some(res) => res.to_string(),
@@ -104,12 +111,21 @@ impl Command {
         };
 
         match self {
-            Command::Transfer { recipient, amount, token, raw_amount } => {
+            Command::Transfer {
+                recipient,
+                amount,
+                token,
+                raw_amount,
+            } => {
                 let amount_str = match token {
                     Some(t) => format!("{raw_amount} {t}"),
                     None => display::format_balance(*amount),
                 };
-                Some(format!("Send {} to {}?", amount_str, display_recipient(recipient)))
+                Some(format!(
+                    "Send {} to {}?",
+                    amount_str,
+                    display_recipient(recipient)
+                ))
             }
             Command::SweepAll { recipient, token } => {
                 let what = match token {
@@ -123,9 +139,14 @@ impl Command {
                 display::format_balance(*amount),
                 display_recipient(validator),
             )),
-            Command::SendNft { object_id, recipient } => {
-                Some(format!("Send NFT {} to {}?", object_id, display_recipient(recipient)))
-            }
+            Command::SendNft {
+                object_id,
+                recipient,
+            } => Some(format!(
+                "Send NFT {} to {}?",
+                object_id,
+                display_recipient(recipient)
+            )),
             Command::SignMessage { message } => {
                 let preview = truncate_preview(message, 40);
                 Some(format!("Sign message \"{preview}\" with your private key?"))

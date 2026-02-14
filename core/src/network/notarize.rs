@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
-use iota_sdk::transaction_builder::{Shared, TransactionBuilder, res};
+use iota_sdk::transaction_builder::{res, Shared, TransactionBuilder};
 use iota_sdk::types::{ObjectId, TypeTag};
 
-use super::NetworkClient;
 use super::types::TransferResult;
+use super::NetworkClient;
 use crate::signer::Signer;
 
 /// Notarization package deployed on testnet.

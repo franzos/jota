@@ -16,7 +16,9 @@ impl NetworkClient {
             "variables": { "name": name }
         });
 
-        let data = self.execute_query(query, "Failed to resolve IOTA name").await?;
+        let data = self
+            .execute_query(query, "Failed to resolve IOTA name")
+            .await?;
         let addr_str = data
             .get("resolveIotaNamesAddress")
             .and_then(|v| v.get("address"))
@@ -38,7 +40,9 @@ impl NetworkClient {
             "variables": { "addr": address.to_string() }
         });
 
-        let data = self.execute_query(query, "Failed to query default IOTA name").await?;
+        let data = self
+            .execute_query(query, "Failed to query default IOTA name")
+            .await?;
         let name = data
             .get("address")
             .and_then(|v| v.get("iotaNamesDefaultName"))

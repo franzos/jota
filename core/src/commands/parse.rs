@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use iota_sdk::types::{Digest, ObjectId};
 
 use super::Command;
@@ -56,14 +56,24 @@ impl Command {
                     if !valid {
                         bail!("Invalid amount '{amount_str}'");
                     }
-                    Ok(Command::Transfer { recipient, amount: 0, token, raw_amount })
+                    Ok(Command::Transfer {
+                        recipient,
+                        amount: 0,
+                        token,
+                        raw_amount,
+                    })
                 } else {
                     let amount = display::parse_iota_amount(amount_str)
                         .with_context(|| format!("Invalid amount '{amount_str}'"))?;
                     if amount == 0 {
                         bail!("Cannot send 0 IOTA.");
                     }
-                    Ok(Command::Transfer { recipient, amount, token, raw_amount })
+                    Ok(Command::Transfer {
+                        recipient,
+                        amount,
+                        token,
+                        raw_amount,
+                    })
                 }
             }
 
@@ -87,9 +97,7 @@ impl Command {
 
             "show_transfer" | "tx" => {
                 let digest_str = arg1.ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Missing transaction digest. Usage: show_transfer <digest>"
-                    )
+                    anyhow::anyhow!("Missing transaction digest. Usage: show_transfer <digest>")
                 })?;
 
                 let digest = Digest::from_base58(digest_str).map_err(|e| {
@@ -125,14 +133,11 @@ impl Command {
 
             "unstake" => {
                 let id_str = arg1.ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Missing staked object ID. Usage: unstake <staked_object_id>"
-                    )
+                    anyhow::anyhow!("Missing staked object ID. Usage: unstake <staked_object_id>")
                 })?;
 
-                let staked_object_id = ObjectId::from_hex(id_str).map_err(|e| {
-                    anyhow::anyhow!("Invalid object ID '{id_str}': {e}")
-                })?;
+                let staked_object_id = ObjectId::from_hex(id_str)
+                    .map_err(|e| anyhow::anyhow!("Invalid object ID '{id_str}': {e}"))?;
 
                 Ok(Command::Unstake { staked_object_id })
             }
@@ -155,12 +160,15 @@ impl Command {
                     )
                 })?;
 
-                let object_id = ObjectId::from_hex(id_str).map_err(|e| {
-                    anyhow::anyhow!("Invalid object ID '{id_str}': {e}")
-                })?;
-                let recipient = Recipient::parse(addr_str.split_whitespace().next().unwrap_or(addr_str))?;
+                let object_id = ObjectId::from_hex(id_str)
+                    .map_err(|e| anyhow::anyhow!("Invalid object ID '{id_str}': {e}"))?;
+                let recipient =
+                    Recipient::parse(addr_str.split_whitespace().next().unwrap_or(addr_str))?;
 
-                Ok(Command::SendNft { object_id, recipient })
+                Ok(Command::SendNft {
+                    object_id,
+                    recipient,
+                })
             }
 
             "status" => Ok(Command::Status {
@@ -232,7 +240,11 @@ impl Command {
                         )
                     })?
                     .to_string();
-                Ok(Command::VerifyMessage { message, signature, public_key })
+                Ok(Command::VerifyMessage {
+                    message,
+                    signature,
+                    public_key,
+                })
             }
 
             "password" | "passwd" => Ok(Command::Password),
@@ -245,9 +257,7 @@ impl Command {
 
             "exit" | "quit" | "q" => Ok(Command::Exit),
 
-            other => bail!(
-                "Unknown command: '{other}'. Type 'help' for a list of commands."
-            ),
+            other => bail!("Unknown command: '{other}'. Type 'help' for a list of commands."),
         }
     }
 }
@@ -276,7 +286,12 @@ mod tests {
         )
         .unwrap();
         match cmd {
-            Command::Transfer { recipient, amount, token, .. } => {
+            Command::Transfer {
+                recipient,
+                amount,
+                token,
+                ..
+            } => {
                 assert_eq!(
                     format!("{recipient}"),
                     "0x0000a4984bd495d4346fa208ddff4f5d5e5ad48c21dec631ddebc99809f16900"
@@ -471,7 +486,9 @@ mod tests {
         );
         assert_eq!(
             Command::parse("status https://example.com/graphql").unwrap(),
-            Command::Status { node_url: Some("https://example.com/graphql".to_string()) }
+            Command::Status {
+                node_url: Some("https://example.com/graphql".to_string())
+            }
         );
     }
 
@@ -509,7 +526,12 @@ mod tests {
     fn parse_transfer_iota_name() {
         let cmd = Command::parse("transfer franz.iota 1.5").unwrap();
         match cmd {
-            Command::Transfer { recipient, amount, token, .. } => {
+            Command::Transfer {
+                recipient,
+                amount,
+                token,
+                ..
+            } => {
                 assert_eq!(recipient, Recipient::Name("franz.iota".into()));
                 assert_eq!(amount, 1_500_000_000);
                 assert_eq!(token, None);
@@ -522,7 +544,12 @@ mod tests {
     fn parse_transfer_with_token() {
         let cmd = Command::parse("transfer franz.iota 50 usdt").unwrap();
         match cmd {
-            Command::Transfer { recipient, amount, token, raw_amount } => {
+            Command::Transfer {
+                recipient,
+                amount,
+                token,
+                raw_amount,
+            } => {
                 assert_eq!(recipient, Recipient::Name("franz.iota".into()));
                 // amount is 0 — deferred to execute time with correct decimals
                 assert_eq!(amount, 0);
@@ -570,13 +597,15 @@ mod tests {
 
     // -- Token amount validation edge cases --
 
-    const TEST_ADDR: &str =
-        "0x0000a4984bd495d4346fa208ddff4f5d5e5ad48c21dec631ddebc99809f16900";
+    const TEST_ADDR: &str = "0x0000a4984bd495d4346fa208ddff4f5d5e5ad48c21dec631ddebc99809f16900";
 
     #[test]
     fn transfer_token_bare_dot_rejected() {
         let input = format!("transfer {TEST_ADDR} . usdt");
-        assert!(Command::parse(&input).is_err(), "bare dot should be rejected");
+        assert!(
+            Command::parse(&input).is_err(),
+            "bare dot should be rejected"
+        );
     }
 
     #[test]
@@ -594,13 +623,19 @@ mod tests {
     #[test]
     fn transfer_token_negative_rejected() {
         let input = format!("transfer {TEST_ADDR} -5 usdt");
-        assert!(Command::parse(&input).is_err(), "negative amount should be rejected");
+        assert!(
+            Command::parse(&input).is_err(),
+            "negative amount should be rejected"
+        );
     }
 
     #[test]
     fn transfer_token_scientific_notation_rejected() {
         let input = format!("transfer {TEST_ADDR} 1e10 usdt");
-        assert!(Command::parse(&input).is_err(), "scientific notation should be rejected");
+        assert!(
+            Command::parse(&input).is_err(),
+            "scientific notation should be rejected"
+        );
     }
 
     #[test]
@@ -627,7 +662,11 @@ mod tests {
     fn parse_verify_message() {
         let cmd = Command::parse("verify hello sig123 pk456").unwrap();
         match cmd {
-            Command::VerifyMessage { message, signature, public_key } => {
+            Command::VerifyMessage {
+                message,
+                signature,
+                public_key,
+            } => {
                 assert_eq!(message, "hello");
                 assert_eq!(signature, "sig123");
                 assert_eq!(public_key, "pk456");

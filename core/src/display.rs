@@ -3,7 +3,10 @@
 /// IOTA uses 9 decimal places (nanos). 1 IOTA = 1_000_000_000 nanos.
 use anyhow::{anyhow, bail, Result};
 
-use crate::network::{NetworkStatus, NftSummary, StakeStatus, StakedIotaSummary, TokenBalance, TransactionDetailsSummary, TransactionDirection, TransactionSummary};
+use crate::network::{
+    NetworkStatus, NftSummary, StakeStatus, StakedIotaSummary, TokenBalance,
+    TransactionDetailsSummary, TransactionDirection, TransactionSummary,
+};
 
 /// Format a raw token amount using the given number of decimal places.
 /// E.g. format_amount(1_500_000, 6) -> "1.500000"
@@ -40,7 +43,9 @@ pub fn parse_token_amount(input: &str, decimals: u8) -> Result<u128> {
 
     // Bare integer — treat as human-readable units
     if let Ok(whole) = input.parse::<u128>() {
-        return whole.checked_mul(multiplier).ok_or_else(|| anyhow!("Amount too large"));
+        return whole
+            .checked_mul(multiplier)
+            .ok_or_else(|| anyhow!("Amount too large"));
     }
 
     let parts: Vec<&str> = input.split('.').collect();
@@ -62,7 +67,8 @@ pub fn parse_token_amount(input: &str, decimals: u8) -> Result<u128> {
             bail!("This token has no decimal places.");
         } else {
             let padded = format!("{:0<width$}", frac_str, width = dec);
-            padded.parse::<u128>()
+            padded
+                .parse::<u128>()
                 .map_err(|_| anyhow!("Invalid fractional part: '{frac_str}'"))?
         }
     } else {
@@ -212,12 +218,23 @@ pub fn format_token_balances_with_meta(
         let coin_meta = meta.iter().find(|m| m.coin_type == b.coin_type);
 
         let (label, amount) = if b.coin_type == "0x2::iota::IOTA" {
-            ("IOTA".to_string(), format_balance_with_symbol(b.total_balance, 9, "IOTA"))
+            (
+                "IOTA".to_string(),
+                format_balance_with_symbol(b.total_balance, 9, "IOTA"),
+            )
         } else if let Some(m) = coin_meta {
-            (m.symbol.clone(), format_balance_with_symbol(b.total_balance, m.decimals, &m.symbol))
+            (
+                m.symbol.clone(),
+                format_balance_with_symbol(b.total_balance, m.decimals, &m.symbol),
+            )
         } else {
             // Fallback: show raw coin type and raw amount
-            let short = b.coin_type.split("::").last().unwrap_or(&b.coin_type).to_string();
+            let short = b
+                .coin_type
+                .split("::")
+                .last()
+                .unwrap_or(&b.coin_type)
+                .to_string();
             (short, b.total_balance.to_string())
         };
 
@@ -255,10 +272,7 @@ pub fn format_nfts(nfts: &[NftSummary]) -> String {
 pub fn format_status(status: &NetworkStatus) -> String {
     format!(
         "  Network:   {}\n  Epoch:     {}\n  Gas price: {} nanos/unit\n  Node:      {}",
-        status.network,
-        status.epoch,
-        status.reference_gas_price,
-        status.node_url,
+        status.network, status.epoch, status.reference_gas_price, status.node_url,
     )
 }
 
@@ -376,7 +390,10 @@ mod tests {
     #[test]
     fn parse_negative_decimal_fails() {
         let result = parse_iota_amount("-0.5");
-        assert!(result.is_err(), "negative decimal amount should be rejected");
+        assert!(
+            result.is_err(),
+            "negative decimal amount should be rejected"
+        );
     }
 
     #[test]
@@ -435,7 +452,7 @@ mod tests {
         assert!(output.contains("2.000000000"));
         // Fee only shown for outgoing
         assert!(output.contains("0.002345600")); // out fee
-        // In fee is "-"
+                                                 // In fee is "-"
         let in_line = output.lines().find(|l| l.starts_with("in ")).unwrap();
         let out_line = output.lines().find(|l| l.starts_with("out")).unwrap();
         assert!(in_line.contains("  -  "));
@@ -444,18 +461,16 @@ mod tests {
 
     #[test]
     fn format_transactions_no_amount() {
-        let txs = vec![
-            TransactionSummary {
-                digest: "0xshortdigest".to_string(),
-                direction: None,
-                timestamp: None,
-                sender: None,
-                amount: None,
-                fee: None,
-                epoch: 0,
-                lamport_version: 0,
-            },
-        ];
+        let txs = vec![TransactionSummary {
+            digest: "0xshortdigest".to_string(),
+            direction: None,
+            timestamp: None,
+            sender: None,
+            amount: None,
+            fee: None,
+            epoch: 0,
+            lamport_version: 0,
+        }];
         let output = format_transactions(&txs);
         assert!(output.contains("-"));
     }

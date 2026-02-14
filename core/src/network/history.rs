@@ -5,12 +5,12 @@ use iota_sdk::graphql_client::pagination::{Direction, PaginationFilter};
 use iota_sdk::graphql_client::query_types::TransactionsFilter;
 use iota_sdk::types::{Digest, Transaction};
 
-use super::NetworkClient;
 use super::transfer::{extract_transfer_amount, extract_transfer_recipient};
 use super::types::{
-    TransactionDetailsSummary, TransactionDirection, TransactionFilter, TransactionSummary,
-    transaction_summary_from_graphql,
+    transaction_summary_from_graphql, TransactionDetailsSummary, TransactionDirection,
+    TransactionFilter, TransactionSummary,
 };
+use super::NetworkClient;
 use crate::cache::TransactionCache;
 
 impl NetworkClient {
@@ -23,20 +23,24 @@ impl NetworkClient {
         address: &iota_sdk::types::Address,
         filter: TransactionFilter,
     ) -> Result<Vec<TransactionSummary>> {
-        let sent = self.query_transactions(
-            TransactionsFilter {
-                sign_address: Some(*address),
-                ..Default::default()
-            },
-            TransactionDirection::Out,
-        ).await?;
-        let recv = self.query_transactions(
-            TransactionsFilter {
-                recv_address: Some(*address),
-                ..Default::default()
-            },
-            TransactionDirection::In,
-        ).await?;
+        let sent = self
+            .query_transactions(
+                TransactionsFilter {
+                    sign_address: Some(*address),
+                    ..Default::default()
+                },
+                TransactionDirection::Out,
+            )
+            .await?;
+        let recv = self
+            .query_transactions(
+                TransactionsFilter {
+                    recv_address: Some(*address),
+                    ..Default::default()
+                },
+                TransactionDirection::In,
+            )
+            .await?;
 
         // Merge: sent takes priority (a tx you signed is "out" even if you also received change)
         let seen: HashSet<String> = sent.iter().map(|t| t.digest.clone()).collect();
@@ -47,15 +51,22 @@ impl NetworkClient {
             }
         }
         all.sort_by(|a, b| {
-            b.epoch.cmp(&a.epoch)
+            b.epoch
+                .cmp(&a.epoch)
                 .then(b.lamport_version.cmp(&a.lamport_version))
         });
 
         // Apply filter
         match filter {
             TransactionFilter::All => Ok(all),
-            TransactionFilter::In => Ok(all.into_iter().filter(|t| t.direction == Some(TransactionDirection::In)).collect()),
-            TransactionFilter::Out => Ok(all.into_iter().filter(|t| t.direction == Some(TransactionDirection::Out)).collect()),
+            TransactionFilter::In => Ok(all
+                .into_iter()
+                .filter(|t| t.direction == Some(TransactionDirection::In))
+                .collect()),
+            TransactionFilter::Out => Ok(all
+                .into_iter()
+                .filter(|t| t.direction == Some(TransactionDirection::Out))
+                .collect()),
         }
     }
 
@@ -86,10 +97,7 @@ impl NetworkClient {
     ///
     /// Fetches up to 7 epochs of history on first sync. On subsequent syncs,
     /// stops as soon as it hits transactions already in the cache.
-    pub async fn sync_transactions(
-        &self,
-        address: &iota_sdk::types::Address,
-    ) -> Result<()> {
+    pub async fn sync_transactions(&self, address: &iota_sdk::types::Address) -> Result<()> {
         let network_str = self.network.to_string();
         let address_str = address.to_string();
 
@@ -210,10 +218,7 @@ impl NetworkClient {
     }
 
     /// Look up a transaction by its digest, returning data and effects.
-    pub async fn transaction_details(
-        &self,
-        digest: &Digest,
-    ) -> Result<TransactionDetailsSummary> {
+    pub async fn transaction_details(&self, digest: &Digest) -> Result<TransactionDetailsSummary> {
         let data_effects = self
             .client
             .transaction_data_effects(*digest)

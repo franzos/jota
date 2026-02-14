@@ -4,9 +4,9 @@ pub mod display;
 #[cfg(feature = "ledger")]
 pub mod ledger_signer;
 #[cfg(feature = "ledger")]
-pub use ledger_signer::LedgerSigner;
-#[cfg(feature = "ledger")]
 pub use ledger_iota_rebased::Bip32Path;
+#[cfg(feature = "ledger")]
+pub use ledger_signer::LedgerSigner;
 
 /// Derive the BIP32 path for a given network and account index.
 #[cfg(feature = "ledger")]
@@ -24,12 +24,12 @@ pub mod wallet;
 pub mod wallet_file;
 
 pub use cache::TransactionCache;
-pub use wallet::{AccountRecord, HardwareKind, Wallet, WalletType};
-pub use network::NetworkClient;
 pub use commands::Command;
+pub use network::NetworkClient;
 pub use recipient::{Recipient, ResolvedRecipient};
 pub use service::WalletService;
-pub use signer::{Signer, SoftwareSigner, SignedMessage, verify_message};
+pub use signer::{verify_message, SignedMessage, Signer, SoftwareSigner};
+pub use wallet::{AccountRecord, HardwareKind, Wallet, WalletType};
 
 pub use iota_sdk::types::{Address, ObjectId};
 
@@ -39,14 +39,10 @@ pub fn validate_wallet_name(name: &str) -> anyhow::Result<()> {
         anyhow::bail!("Wallet name cannot be empty.");
     }
     if name.contains('/') || name.contains('\\') || name.contains("..") {
-        anyhow::bail!(
-            "Invalid wallet name '{name}'. Must not contain '/', '\\', or '..'."
-        );
+        anyhow::bail!("Invalid wallet name '{name}'. Must not contain '/', '\\', or '..'.");
     }
     if name.contains(std::path::MAIN_SEPARATOR) {
-        anyhow::bail!(
-            "Invalid wallet name '{name}'. Must not contain path separators."
-        );
+        anyhow::bail!("Invalid wallet name '{name}'. Must not contain path separators.");
     }
     Ok(())
 }
@@ -95,7 +91,9 @@ fn read_wallet_meta(path: &std::path::Path) -> WalletType {
     std::fs::read_to_string(path)
         .ok()
         .and_then(|s| match s.trim() {
-            "ledger" | "hardware:ledger" => Some(WalletType::Hardware(wallet::HardwareKind::Ledger)),
+            "ledger" | "hardware:ledger" => {
+                Some(WalletType::Hardware(wallet::HardwareKind::Ledger))
+            }
             _ => Some(WalletType::Software),
         })
         .unwrap_or(WalletType::Software)

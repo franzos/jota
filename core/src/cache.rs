@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 
 use crate::network::{TransactionDirection, TransactionFilter, TransactionSummary};
 
@@ -33,8 +33,7 @@ impl TransactionPage {
 /// Default DB location: platform data directory + `iota-wallet/transactions.db`
 /// (Linux: `~/.local/share`, macOS: `~/Library/Application Support`)
 fn default_db_path() -> Result<PathBuf> {
-    let data_dir = dirs::data_dir()
-        .context("Cannot determine data directory")?;
+    let data_dir = dirs::data_dir().context("Cannot determine data directory")?;
     Ok(data_dir.join("iota-wallet").join("transactions.db"))
 }
 
@@ -43,16 +42,14 @@ impl TransactionCache {
     pub fn open() -> Result<Self> {
         let path = default_db_path()?;
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .context("Failed to create cache directory")?;
+            std::fs::create_dir_all(parent).context("Failed to create cache directory")?;
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
                 std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700))?;
             }
         }
-        let conn = Connection::open(&path)
-            .context("Failed to open transaction cache database")?;
+        let conn = Connection::open(&path).context("Failed to open transaction cache database")?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -66,16 +63,16 @@ impl TransactionCache {
     /// Open an in-memory cache (for testing).
     #[cfg(test)]
     pub fn open_in_memory() -> Result<Self> {
-        let conn = Connection::open_in_memory()
-            .context("Failed to open in-memory database")?;
+        let conn = Connection::open_in_memory().context("Failed to open in-memory database")?;
         let cache = Self { conn };
         cache.init_schema()?;
         Ok(cache)
     }
 
     fn init_schema(&self) -> Result<()> {
-        self.conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS transactions (
+        self.conn
+            .execute_batch(
+                "CREATE TABLE IF NOT EXISTS transactions (
                 network         TEXT    NOT NULL,
                 address         TEXT    NOT NULL,
                 digest          TEXT    NOT NULL,
@@ -118,20 +115,24 @@ impl TransactionCache {
                 last_epoch      INTEGER NOT NULL DEFAULT 0,
                 last_synced_at  INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (network, address)
-            );"
-        ).context("Failed to initialize cache schema")?;
+            );",
+            )
+            .context("Failed to initialize cache schema")?;
         Ok(())
     }
 
     /// Insert or update transactions. Sent direction takes priority over received
     /// (if you signed a tx, it's "out" even if you also received change).
     pub fn insert(&self, network: &str, address: &str, txs: &[TransactionSummary]) -> Result<()> {
-        let tx = self.conn.unchecked_transaction()
+        let tx = self
+            .conn
+            .unchecked_transaction()
             .context("Failed to begin transaction")?;
 
         {
-            let mut stmt = tx.prepare_cached(
-                "INSERT INTO transactions (
+            let mut stmt = tx
+                .prepare_cached(
+                    "INSERT INTO transactions (
                     network, address, digest, direction, sender, recipient,
                     amount, fee, epoch, lamport_version
                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
@@ -142,8 +143,9 @@ impl TransactionCache {
                     END,
                     sender = COALESCE(excluded.sender, transactions.sender),
                     amount = COALESCE(excluded.amount, transactions.amount),
-                    fee = COALESCE(excluded.fee, transactions.fee)"
-            ).context("Failed to prepare insert statement")?;
+                    fee = COALESCE(excluded.fee, transactions.fee)",
+                )
+                .context("Failed to prepare insert statement")?;
 
             for tx_summary in txs {
                 let dir = tx_summary.direction.as_ref().map(|d| d.to_string());
@@ -158,7 +160,8 @@ impl TransactionCache {
                     tx_summary.fee.map(|f| f as i64),
                     tx_summary.epoch as i64,
                     tx_summary.lamport_version as i64,
-                ]).context("Failed to insert transaction")?;
+                ])
+                .context("Failed to insert transaction")?;
             }
         }
 
@@ -184,9 +187,10 @@ impl TransactionCache {
         let count_sql = format!(
             "SELECT COUNT(*) FROM transactions WHERE network = ?1 AND address = ?2 {dir_clause}"
         );
-        let total: u32 = self.conn.query_row(&count_sql, params![network, address], |row| {
-            row.get(0)
-        }).context("Failed to count transactions")?;
+        let total: u32 = self
+            .conn
+            .query_row(&count_sql, params![network, address], |row| row.get(0))
+            .context("Failed to count transactions")?;
 
         let query_sql = format!(
             "SELECT digest, direction, sender, amount, fee, epoch, lamport_version, timestamp
@@ -196,12 +200,13 @@ impl TransactionCache {
              LIMIT ?3 OFFSET ?4"
         );
 
-        let mut stmt = self.conn.prepare(&query_sql)
+        let mut stmt = self
+            .conn
+            .prepare(&query_sql)
             .context("Failed to prepare query")?;
 
-        let rows = stmt.query_map(
-            params![network, address, limit, offset],
-            |row| {
+        let rows = stmt
+            .query_map(params![network, address, limit, offset], |row| {
                 let dir_str: Option<String> = row.get(1)?;
                 let direction = dir_str.as_deref().map(|s| match s {
                     "out" => TransactionDirection::Out,
@@ -223,8 +228,8 @@ impl TransactionCache {
                     epoch: epoch as u64,
                     lamport_version: lamport as u64,
                 })
-            },
-        ).context("Failed to query transactions")?;
+            })
+            .context("Failed to query transactions")?;
 
         let transactions: Vec<TransactionSummary> = rows
             .collect::<Result<Vec<_>, _>>()
@@ -244,11 +249,7 @@ impl TransactionCache {
     /// Assumes all balance-affecting transactions have a direction set and
     /// the cache contains a complete sync — partial history will skew the
     /// backward-walk reconstruction in the GUI chart.
-    pub fn query_epoch_deltas(
-        &self,
-        network: &str,
-        address: &str,
-    ) -> Result<Vec<(u64, i64)>> {
+    pub fn query_epoch_deltas(&self, network: &str, address: &str) -> Result<Vec<(u64, i64)>> {
         let mut stmt = self.conn.prepare(
             "SELECT epoch,
                     SUM(CASE WHEN direction = 'in' THEN COALESCE(amount, 0) ELSE 0 END)
@@ -259,11 +260,13 @@ impl TransactionCache {
              ORDER BY epoch ASC"
         ).context("Failed to prepare epoch deltas query")?;
 
-        let rows = stmt.query_map(params![network, address], |row| {
-            let epoch: i64 = row.get(0)?;
-            let delta: i64 = row.get(1)?;
-            Ok((epoch as u64, delta))
-        }).context("Failed to query epoch deltas")?;
+        let rows = stmt
+            .query_map(params![network, address], |row| {
+                let epoch: i64 = row.get(0)?;
+                let delta: i64 = row.get(1)?;
+                Ok((epoch as u64, delta))
+            })
+            .context("Failed to query epoch deltas")?;
 
         rows.collect::<Result<Vec<_>, _>>()
             .context("Failed to read epoch delta rows")
@@ -271,13 +274,14 @@ impl TransactionCache {
 
     /// Get the set of known transaction digests for an (network, address) pair.
     pub fn known_digests(&self, network: &str, address: &str) -> Result<HashSet<String>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT digest FROM transactions WHERE network = ?1 AND address = ?2"
-        ).context("Failed to prepare known_digests query")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT digest FROM transactions WHERE network = ?1 AND address = ?2")
+            .context("Failed to prepare known_digests query")?;
 
-        let rows = stmt.query_map(params![network, address], |row| {
-            row.get::<_, String>(0)
-        }).context("Failed to query known digests")?;
+        let rows = stmt
+            .query_map(params![network, address], |row| row.get::<_, String>(0))
+            .context("Failed to query known digests")?;
 
         let mut digests = HashSet::new();
         for row in rows {
@@ -307,14 +311,16 @@ impl TransactionCache {
             .unwrap_or_default()
             .as_millis() as i64;
 
-        self.conn.execute(
-            "INSERT INTO sync_state (network, address, last_epoch, last_synced_at)
+        self.conn
+            .execute(
+                "INSERT INTO sync_state (network, address, last_epoch, last_synced_at)
              VALUES (?1, ?2, ?3, ?4)
              ON CONFLICT (network, address) DO UPDATE SET
                  last_epoch = excluded.last_epoch,
                  last_synced_at = excluded.last_synced_at",
-            params![network, address, epoch as i64, now],
-        ).context("Failed to update sync state")?;
+                params![network, address, epoch as i64, now],
+            )
+            .context("Failed to update sync state")?;
         Ok(())
     }
 }
@@ -354,7 +360,9 @@ mod tests {
         let cache = TransactionCache::open_in_memory().unwrap();
         cache.insert("testnet", "0xme", &sample_txs()).unwrap();
 
-        let page = cache.query("testnet", "0xme", &TransactionFilter::All, 25, 0).unwrap();
+        let page = cache
+            .query("testnet", "0xme", &TransactionFilter::All, 25, 0)
+            .unwrap();
         assert_eq!(page.transactions.len(), 2);
         assert_eq!(page.total, 2);
         // Sorted by epoch DESC, lamport DESC
@@ -367,11 +375,15 @@ mod tests {
         let cache = TransactionCache::open_in_memory().unwrap();
         cache.insert("testnet", "0xme", &sample_txs()).unwrap();
 
-        let page_in = cache.query("testnet", "0xme", &TransactionFilter::In, 25, 0).unwrap();
+        let page_in = cache
+            .query("testnet", "0xme", &TransactionFilter::In, 25, 0)
+            .unwrap();
         assert_eq!(page_in.transactions.len(), 1);
         assert_eq!(page_in.transactions[0].digest, "0xbbb");
 
-        let page_out = cache.query("testnet", "0xme", &TransactionFilter::Out, 25, 0).unwrap();
+        let page_out = cache
+            .query("testnet", "0xme", &TransactionFilter::Out, 25, 0)
+            .unwrap();
         assert_eq!(page_out.transactions.len(), 1);
         assert_eq!(page_out.transactions[0].digest, "0xaaa");
     }
@@ -381,13 +393,17 @@ mod tests {
         let cache = TransactionCache::open_in_memory().unwrap();
         cache.insert("testnet", "0xme", &sample_txs()).unwrap();
 
-        let page1 = cache.query("testnet", "0xme", &TransactionFilter::All, 1, 0).unwrap();
+        let page1 = cache
+            .query("testnet", "0xme", &TransactionFilter::All, 1, 0)
+            .unwrap();
         assert_eq!(page1.transactions.len(), 1);
         assert_eq!(page1.total, 2);
         assert!(page1.has_next());
         assert!(!page1.has_prev());
 
-        let page2 = cache.query("testnet", "0xme", &TransactionFilter::All, 1, 1).unwrap();
+        let page2 = cache
+            .query("testnet", "0xme", &TransactionFilter::All, 1, 1)
+            .unwrap();
         assert_eq!(page2.transactions.len(), 1);
         assert!(!page2.has_next());
         assert!(page2.has_prev());
@@ -422,9 +438,14 @@ mod tests {
         }];
         cache.insert("testnet", "0xme", &sent).unwrap();
 
-        let page = cache.query("testnet", "0xme", &TransactionFilter::All, 25, 0).unwrap();
+        let page = cache
+            .query("testnet", "0xme", &TransactionFilter::All, 25, 0)
+            .unwrap();
         assert_eq!(page.transactions.len(), 1);
-        assert_eq!(page.transactions[0].direction, Some(TransactionDirection::Out));
+        assert_eq!(
+            page.transactions[0].direction,
+            Some(TransactionDirection::Out)
+        );
     }
 
     #[test]
@@ -467,10 +488,14 @@ mod tests {
         let cache = TransactionCache::open_in_memory().unwrap();
         cache.insert("testnet", "0xme", &sample_txs()).unwrap();
 
-        let page = cache.query("mainnet", "0xme", &TransactionFilter::All, 25, 0).unwrap();
+        let page = cache
+            .query("mainnet", "0xme", &TransactionFilter::All, 25, 0)
+            .unwrap();
         assert_eq!(page.total, 0);
 
-        let page = cache.query("testnet", "0xother", &TransactionFilter::All, 25, 0).unwrap();
+        let page = cache
+            .query("testnet", "0xother", &TransactionFilter::All, 25, 0)
+            .unwrap();
         assert_eq!(page.total, 0);
     }
 }

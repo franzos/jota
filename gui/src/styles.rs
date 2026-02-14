@@ -1,6 +1,6 @@
+use iced::font::Weight;
 use iced::widget::{button, container, Space};
 use iced::{Background, Border, Color, Element, Fill, Font, Shadow, Vector};
-use iced::font::Weight;
 
 use crate::{ACTIVE, BORDER, MUTED, PRIMARY, SURFACE};
 
@@ -234,9 +234,7 @@ pub fn nav_btn(active: bool) -> impl Fn(&iced::Theme, button::Status) -> button:
         } else {
             match status {
                 button::Status::Hovered => button::Style {
-                    background: Some(Background::Color(Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.04,
-                    ))),
+                    background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
                     text_color: Color::WHITE,
                     border: Border {
                         radius: 8.0.into(),

@@ -85,7 +85,10 @@ async fn devnet_faucet_and_balance() {
         .balance(wallet.address())
         .await
         .expect("failed to query balance after faucet");
-    assert!(balance > 0, "balance should be > 0 after faucet, got {balance}");
+    assert!(
+        balance > 0,
+        "balance should be > 0 after faucet, got {balance}"
+    );
 }
 
 #[tokio::test]
@@ -122,7 +125,10 @@ async fn devnet_send_iota() {
         .await
         .expect("send_iota failed");
 
-    assert!(!result.digest.is_empty(), "transaction digest should not be empty");
+    assert!(
+        !result.digest.is_empty(),
+        "transaction digest should not be empty"
+    );
     eprintln!("send_iota digest: {}", result.digest);
 
     wait_for_indexer().await;
@@ -148,17 +154,23 @@ async fn testnet_client_creation() {
     let devnet = NetworkClient::new(&devnet_config(), false);
     assert!(devnet.is_ok(), "devnet client creation should succeed");
 
-    let mainnet = NetworkClient::new(&NetworkConfig {
-        network: Network::Mainnet,
-        custom_url: None,
-    }, false);
+    let mainnet = NetworkClient::new(
+        &NetworkConfig {
+            network: Network::Mainnet,
+            custom_url: None,
+        },
+        false,
+    );
     assert!(mainnet.is_ok(), "mainnet client creation should succeed");
 
     // Custom without URL should fail
-    let custom_no_url = NetworkClient::new(&NetworkConfig {
-        network: Network::Custom,
-        custom_url: None,
-    }, false);
+    let custom_no_url = NetworkClient::new(
+        &NetworkConfig {
+            network: Network::Custom,
+            custom_url: None,
+        },
+        false,
+    );
     assert!(custom_no_url.is_err(), "custom without URL should fail");
 }
 
@@ -178,13 +190,25 @@ async fn wallet_create_recover_open_roundtrip() {
 
     // Open the same wallet from disk
     let wallet2 = Wallet::open(&path1, password).expect("failed to open wallet");
-    assert_eq!(*wallet2.address(), address1, "reopened wallet should have same address");
-    assert_eq!(wallet2.mnemonic().unwrap(), mnemonic, "reopened wallet should have same mnemonic");
+    assert_eq!(
+        *wallet2.address(),
+        address1,
+        "reopened wallet should have same address"
+    );
+    assert_eq!(
+        wallet2.mnemonic().unwrap(),
+        mnemonic,
+        "reopened wallet should have same mnemonic"
+    );
 
     // Recover from mnemonic to a different file
     let wallet3 = Wallet::recover_from_mnemonic(path2, password, &mnemonic, testnet_config())
         .expect("failed to recover wallet");
-    assert_eq!(*wallet3.address(), address1, "recovered wallet should have same address");
+    assert_eq!(
+        *wallet3.address(),
+        address1,
+        "recovered wallet should have same address"
+    );
 }
 
 // --- New integration tests ---
@@ -198,21 +222,23 @@ async fn devnet_send_insufficient_balance() {
     let config = devnet_config();
 
     let network = NetworkClient::new(&config, false).expect("failed to create devnet client");
-    let sender = Wallet::create_new(sender_path, password, config)
-        .expect("failed to create sender wallet");
+    let sender =
+        Wallet::create_new(sender_path, password, config).expect("failed to create sender wallet");
 
     // Don't fund via faucet — balance is 0
     let recipient = iota_sdk::types::Address::ZERO;
     let amount = 100_000_000u64; // 0.1 IOTA
 
     let result = network
-        .send_iota(&sender.signer().unwrap(), sender.address(), recipient, amount)
+        .send_iota(
+            &sender.signer().unwrap(),
+            sender.address(),
+            recipient,
+            amount,
+        )
         .await;
 
-    assert!(
-        result.is_err(),
-        "sending with no balance should fail"
-    );
+    assert!(result.is_err(), "sending with no balance should fail");
     let err = result.err().expect("already checked is_err").to_string();
     eprintln!("Expected error for insufficient balance: {err}");
 }
@@ -226,8 +252,7 @@ async fn devnet_send_to_self() {
     let config = devnet_config();
 
     let network = NetworkClient::new(&config, false).expect("failed to create devnet client");
-    let wallet = Wallet::create_new(path, password, config)
-        .expect("failed to create wallet");
+    let wallet = Wallet::create_new(path, password, config).expect("failed to create wallet");
 
     // Fund via faucet
     network
@@ -255,7 +280,10 @@ async fn devnet_send_to_self() {
         .await
         .expect("self-send failed");
 
-    assert!(!result.digest.is_empty(), "self-send should produce a digest");
+    assert!(
+        !result.digest.is_empty(),
+        "self-send should produce a digest"
+    );
 
     wait_for_indexer().await;
 
@@ -275,7 +303,10 @@ async fn devnet_send_to_self() {
         balance_after > 0,
         "balance after self-send should still be > 0"
     );
-    eprintln!("self-send: before={balance_before} after={balance_after} gas_cost={}", balance_before - balance_after);
+    eprintln!(
+        "self-send: before={balance_before} after={balance_after} gas_cost={}",
+        balance_before - balance_after
+    );
 }
 
 #[tokio::test]
@@ -287,8 +318,7 @@ async fn devnet_faucet_twice() {
     let config = devnet_config();
 
     let network = NetworkClient::new(&config, false).expect("failed to create devnet client");
-    let wallet = Wallet::create_new(path, password, config)
-        .expect("failed to create wallet");
+    let wallet = Wallet::create_new(path, password, config).expect("failed to create wallet");
 
     // First faucet request
     network
@@ -302,7 +332,10 @@ async fn devnet_faucet_twice() {
         .balance(wallet.address())
         .await
         .expect("failed to query balance after first faucet");
-    assert!(balance_after_first > 0, "balance should be > 0 after first faucet");
+    assert!(
+        balance_after_first > 0,
+        "balance should be > 0 after first faucet"
+    );
 
     // Second faucet request
     network

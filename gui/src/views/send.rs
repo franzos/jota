@@ -21,12 +21,18 @@ impl App {
         let token_options: Vec<TokenOption> = if self.token_balances.is_empty() {
             vec![TokenOption::iota(self.balance)]
         } else {
-            self.token_balances.iter().map(|tb| {
-                let meta = self.token_meta.iter().find(|m| m.coin_type == tb.coin_type);
-                TokenOption::from_token_balance(tb, meta)
-            }).collect()
+            self.token_balances
+                .iter()
+                .map(|tb| {
+                    let meta = self.token_meta.iter().find(|m| m.coin_type == tb.coin_type);
+                    TokenOption::from_token_balance(tb, meta)
+                })
+                .collect()
         };
-        let selected = self.selected_token.clone().unwrap_or_else(|| TokenOption::iota(self.balance));
+        let selected = self
+            .selected_token
+            .clone()
+            .unwrap_or_else(|| TokenOption::iota(self.balance));
         let token_picker = pick_list(token_options, Some(selected), Message::TokenSelected)
             .text_size(13)
             .width(Length::Fixed(280.0));
@@ -42,13 +48,15 @@ impl App {
                     .color(styles::ACCENT)
                     .into(),
             ),
-            Some(Err(e)) => Some(
-                text(e.as_str()).size(11).color(styles::DANGER).into(),
-            ),
+            Some(Err(e)) => Some(text(e.as_str()).size(11).color(styles::DANGER).into()),
             None => None,
         };
 
-        let token_symbol = self.selected_token.as_ref().map(|t| t.symbol.as_str()).unwrap_or("IOTA");
+        let token_symbol = self
+            .selected_token
+            .as_ref()
+            .map(|t| t.symbol.as_str())
+            .unwrap_or("IOTA");
         let amount_placeholder = format!("Amount ({token_symbol})");
         let amount = text_input(&amount_placeholder, &self.amount)
             .on_input(Message::AmountChanged)
@@ -81,15 +89,11 @@ impl App {
             .push(Space::new().height(12))
             .push(send);
 
-        let header = row![title, Space::new().width(Fill)]
-            .align_y(iced::Alignment::Center);
+        let header = row![title, Space::new().width(Fill)].align_y(iced::Alignment::Center);
 
         let mut col = column![
             header,
-            container(form)
-                .padding(24)
-                .width(Fill)
-                .style(styles::card),
+            container(form).padding(24).width(Fill).style(styles::card),
         ]
         .spacing(16);
 

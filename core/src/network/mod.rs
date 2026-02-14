@@ -10,7 +10,7 @@ mod types;
 pub use notarize::TESTNET_NOTARIZATION_PACKAGE;
 pub use types::*;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use iota_sdk::graphql_client::faucet::FaucetClient;
 use iota_sdk::graphql_client::Client;
 use iota_sdk::types::Address;
@@ -59,17 +59,25 @@ impl NetworkClient {
 
     pub fn new(config: &NetworkConfig, allow_insecure: bool) -> Result<Self> {
         let (client, node_url) = match &config.network {
-            Network::Testnet => (Client::new_testnet(), "https://graphql.testnet.iota.cafe".to_string()),
-            Network::Mainnet => (Client::new_mainnet(), "https://graphql.mainnet.iota.cafe".to_string()),
-            Network::Devnet => (Client::new_devnet(), "https://graphql.devnet.iota.cafe".to_string()),
+            Network::Testnet => (
+                Client::new_testnet(),
+                "https://graphql.testnet.iota.cafe".to_string(),
+            ),
+            Network::Mainnet => (
+                Client::new_mainnet(),
+                "https://graphql.mainnet.iota.cafe".to_string(),
+            ),
+            Network::Devnet => (
+                Client::new_devnet(),
+                "https://graphql.devnet.iota.cafe".to_string(),
+            ),
             Network::Custom => {
                 let url = config
                     .custom_url
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("Custom network requires a node URL"))?;
                 validate_node_url(url, allow_insecure)?;
-                let c = Client::new(url)
-                    .context("Failed to create client with custom URL")?;
+                let c = Client::new(url).context("Failed to create client with custom URL")?;
                 (c, url.clone())
             }
         };
@@ -84,8 +92,7 @@ impl NetworkClient {
     /// Create a client pointed at an arbitrary GraphQL endpoint.
     pub fn new_custom(url: &str, allow_insecure: bool) -> Result<Self> {
         validate_node_url(url, allow_insecure)?;
-        let client = Client::new(url)
-            .context("Failed to create client with custom URL")?;
+        let client = Client::new(url).context("Failed to create client with custom URL")?;
         Ok(Self {
             client,
             network: Network::Custom,
@@ -145,7 +152,9 @@ impl NetworkClient {
             }
         });
 
-        let data = self.execute_query(query, "Failed to query token balances").await?;
+        let data = self
+            .execute_query(query, "Failed to query token balances")
+            .await?;
         let empty = vec![];
         let nodes = data
             .get("address")
@@ -213,7 +222,8 @@ impl NetworkClient {
         use iota_sdk::graphql_client::pagination::PaginationFilter;
         use iota_sdk::types::StructTag;
 
-        let struct_tag: StructTag = coin_type.parse()
+        let struct_tag: StructTag = coin_type
+            .parse()
             .map_err(|e| anyhow::anyhow!("Invalid coin type '{coin_type}': {e}"))?;
 
         let page = self
@@ -276,7 +286,9 @@ mod tests {
             network: Network::Custom,
             custom_url: Some("http://localhost:9125/graphql".to_string()),
         };
-        let err = NetworkClient::new(&config, false).err().expect("should fail");
+        let err = NetworkClient::new(&config, false)
+            .err()
+            .expect("should fail");
         assert!(err.to_string().contains("--insecure"));
     }
 
@@ -301,7 +313,9 @@ mod tests {
             network: Network::Custom,
             custom_url: Some("ftp://example.com/graphql".to_string()),
         };
-        let err = NetworkClient::new(&config, false).err().expect("should fail");
+        let err = NetworkClient::new(&config, false)
+            .err()
+            .expect("should fail");
         assert!(err.to_string().contains("Invalid node URL scheme"));
     }
 }

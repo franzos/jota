@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use iota_sdk::transaction_builder::TransactionBuilder;
 use iota_sdk::types::{Address, ObjectId};
 
-use super::NetworkClient;
 use super::types::{NftSummary, TransferResult};
+use super::NetworkClient;
 use crate::signer::Signer;
 
 /// Max pages to fetch when listing owned objects for NFTs.
@@ -49,10 +49,10 @@ impl NetworkClient {
                 }
             });
 
-            let data = self.execute_query(query, "Failed to query owned objects").await?;
-            let objects = data
-                .get("address")
-                .and_then(|a| a.get("objects"));
+            let data = self
+                .execute_query(query, "Failed to query owned objects")
+                .await?;
+            let objects = data.get("address").and_then(|a| a.get("objects"));
 
             let empty = vec![];
             let nodes = objects
@@ -104,7 +104,9 @@ impl NetworkClient {
 
         // Skip Coin objects — those are fungible tokens, not NFTs
         if object_type.starts_with("0x2::coin::Coin")
-            || object_type.starts_with("0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin")
+            || object_type.starts_with(
+                "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin",
+            )
         {
             return None;
         }
@@ -115,15 +117,16 @@ impl NetworkClient {
         }
 
         // Parse Display fields
-        let display_fields = node
-            .get("display")
-            .and_then(|d| d.as_array());
+        let display_fields = node.get("display").and_then(|d| d.as_array());
 
         let (mut name, mut description, mut image_url) = (None, None, None);
         if let Some(fields) = display_fields {
             for field in fields {
                 let key = field.get("key").and_then(|k| k.as_str()).unwrap_or("");
-                let value = field.get("value").and_then(|v| v.as_str()).map(String::from);
+                let value = field
+                    .get("value")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
                 match key {
                     "name" => name = value,
                     "description" => description = value,
@@ -157,7 +160,10 @@ impl NetworkClient {
     ) -> Result<TransferResult> {
         let mut builder = TransactionBuilder::new(*sender).with_client(&self.client);
         builder.transfer_objects(recipient, [object_id]);
-        let tx = builder.finish().await.context("Failed to build NFT transfer transaction")?;
+        let tx = builder
+            .finish()
+            .await
+            .context("Failed to build NFT transfer transaction")?;
         self.sign_and_execute(&tx, signer).await
     }
 }

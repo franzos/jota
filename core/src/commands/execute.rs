@@ -1,12 +1,12 @@
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 
-use super::Command;
 use super::help::help_text;
+use super::Command;
 use crate::cache::TransactionCache;
 use crate::display;
 use crate::network::NetworkClient;
-use crate::service::WalletService;
 use crate::recipient::ResolvedRecipient;
+use crate::service::WalletService;
 use crate::wallet::Wallet;
 
 impl Command {
@@ -40,7 +40,12 @@ impl Command {
                 }
             }
 
-            Command::Transfer { recipient, amount, token, raw_amount } => {
+            Command::Transfer {
+                recipient,
+                amount,
+                token,
+                raw_amount,
+            } => {
                 let res = match resolved {
                     Some(r) => r.clone(),
                     None => service.resolve_recipient(recipient).await?,
@@ -55,9 +60,13 @@ impl Command {
                     if token_amount == 0 {
                         bail!("Cannot send 0 {}.", meta.symbol);
                     }
-                    let result = service.send_token(res.address, &meta.coin_type, token_amount).await?;
+                    let result = service
+                        .send_token(res.address, &meta.coin_type, token_amount)
+                        .await?;
                     let display_amount = display::format_balance_with_symbol(
-                        token_amount as u128, meta.decimals, &meta.symbol,
+                        token_amount as u128,
+                        meta.decimals,
+                        &meta.symbol,
                     );
 
                     if json_output {
@@ -75,10 +84,7 @@ impl Command {
                     } else {
                         Ok(format!(
                             "Transaction sent!\n  Digest: {}\n  Status: {}\n  Amount: {} -> {}",
-                            result.digest,
-                            result.status,
-                            display_amount,
-                            res,
+                            result.digest, result.status, display_amount, res,
                         ))
                     }
                 } else {
@@ -115,10 +121,11 @@ impl Command {
 
                 if let Some(token_alias) = token {
                     let meta = service.resolve_coin_type(token_alias).await?;
-                    let (result, total) = service.sweep_all_token(res.address, &meta.coin_type).await?;
-                    let display_amount = display::format_balance_with_symbol(
-                        total, meta.decimals, &meta.symbol,
-                    );
+                    let (result, total) = service
+                        .sweep_all_token(res.address, &meta.coin_type)
+                        .await?;
+                    let display_amount =
+                        display::format_balance_with_symbol(total, meta.decimals, &meta.symbol);
 
                     if json_output {
                         Ok(serde_json::json!({
@@ -135,10 +142,7 @@ impl Command {
                     } else {
                         Ok(format!(
                             "Sweep sent!\n  Digest: {}\n  Status: {}\n  Amount: {} -> {}",
-                            result.digest,
-                            result.status,
-                            display_amount,
-                            res,
+                            result.digest, result.status, display_amount, res,
                         ))
                     }
                 } else {
@@ -172,7 +176,9 @@ impl Command {
                     let cache = TransactionCache::open()?;
                     let network_str = service.network_name();
                     let address_str = service.address().to_string();
-                    cache.query(network_str, &address_str, filter, 25, 0)?.transactions
+                    cache
+                        .query(network_str, &address_str, filter, 25, 0)?
+                        .transactions
                 };
                 if json_output {
                     let json_txs: Vec<serde_json::Value> = txs
@@ -252,8 +258,7 @@ impl Command {
                 } else {
                     Ok(format!(
                         "Unstake sent!\n  Digest: {}\n  Status: {}",
-                        result.digest,
-                        result.status,
+                        result.digest, result.status,
                     ))
                 }
             }
@@ -320,7 +325,11 @@ impl Command {
 
             Command::Status { node_url } => {
                 let status = match node_url {
-                    Some(url) => NetworkClient::new_custom(url, allow_insecure)?.status().await?,
+                    Some(url) => {
+                        NetworkClient::new_custom(url, allow_insecure)?
+                            .status()
+                            .await?
+                    }
                     None => service.status().await?,
                 };
                 if json_output {
@@ -346,7 +355,9 @@ impl Command {
                     })
                     .to_string())
                 } else {
-                    Ok(format!("Faucet tokens requested for {addr}. It may take a moment to arrive."))
+                    Ok(format!(
+                        "Faucet tokens requested for {addr}. It may take a moment to arrive."
+                    ))
                 }
             }
 
@@ -354,7 +365,8 @@ impl Command {
                 if wallet.is_hardware() {
                     bail!("Seed phrase is not available for hardware wallets.");
                 }
-                let mnemonic = wallet.mnemonic()
+                let mnemonic = wallet
+                    .mnemonic()
                     .ok_or_else(|| anyhow::anyhow!("No mnemonic available."))?;
                 if json_output {
                     Ok(serde_json::json!({
@@ -362,81 +374,84 @@ impl Command {
                     })
                     .to_string())
                 } else {
-                    Ok(format!(
-                        "Seed phrase (keep this secret!):\n  {}",
-                        mnemonic
-                    ))
+                    Ok(format!("Seed phrase (keep this secret!):\n  {}", mnemonic))
                 }
             }
 
-            Command::Account { index } => {
-                match index {
-                    None => {
-                        let idx = wallet.account_index();
-                        let addr = wallet.address().to_string();
-                        let is_hardware = wallet.is_hardware();
-                        if json_output {
-                            let known: Vec<serde_json::Value> = wallet
-                                .known_accounts()
-                                .iter()
-                                .map(|a| {
-                                    let a_addr = if is_hardware {
-                                        if a.index == idx { addr.clone() } else { "?".to_string() }
+            Command::Account { index } => match index {
+                None => {
+                    let idx = wallet.account_index();
+                    let addr = wallet.address().to_string();
+                    let is_hardware = wallet.is_hardware();
+                    if json_output {
+                        let known: Vec<serde_json::Value> = wallet
+                            .known_accounts()
+                            .iter()
+                            .map(|a| {
+                                let a_addr = if is_hardware {
+                                    if a.index == idx {
+                                        addr.clone()
                                     } else {
-                                        wallet
-                                            .derive_address_for(a.index)
-                                            .map(|a| a.to_string())
-                                            .unwrap_or_default()
-                                    };
-                                    serde_json::json!({
-                                        "index": a.index,
-                                        "address": a_addr,
-                                        "active": a.index == idx,
-                                    })
+                                        "?".to_string()
+                                    }
+                                } else {
+                                    wallet
+                                        .derive_address_for(a.index)
+                                        .map(|a| a.to_string())
+                                        .unwrap_or_default()
+                                };
+                                serde_json::json!({
+                                    "index": a.index,
+                                    "address": a_addr,
+                                    "active": a.index == idx,
                                 })
-                                .collect();
-                            Ok(serde_json::json!({
-                                "account_index": idx,
-                                "address": addr,
-                                "known_accounts": known,
                             })
-                            .to_string())
-                        } else {
-                            let type_label = match wallet.hardware_kind() {
-                                Some(kind) => format!(" ({kind})"),
-                                None => String::new(),
-                            };
-                            let mut out = format!("Account #{idx}{type_label}\n  {addr}\n");
-                            let known = wallet.known_accounts();
-                            if !known.is_empty() {
-                                out.push_str("\nKnown accounts:\n");
-                                for a in known {
-                                    let a_addr = if is_hardware {
-                                        if a.index == idx { addr.clone() } else { "?".to_string() }
+                            .collect();
+                        Ok(serde_json::json!({
+                            "account_index": idx,
+                            "address": addr,
+                            "known_accounts": known,
+                        })
+                        .to_string())
+                    } else {
+                        let type_label = match wallet.hardware_kind() {
+                            Some(kind) => format!(" ({kind})"),
+                            None => String::new(),
+                        };
+                        let mut out = format!("Account #{idx}{type_label}\n  {addr}\n");
+                        let known = wallet.known_accounts();
+                        if !known.is_empty() {
+                            out.push_str("\nKnown accounts:\n");
+                            for a in known {
+                                let a_addr = if is_hardware {
+                                    if a.index == idx {
+                                        addr.clone()
                                     } else {
-                                        wallet
-                                            .derive_address_for(a.index)
-                                            .map(|a| a.to_string())
-                                            .unwrap_or_default()
-                                    };
-                                    let short = if a_addr.len() > 20 {
-                                        format!("{}...{}", &a_addr[..10], &a_addr[a_addr.len()-8..])
-                                    } else {
-                                        a_addr
-                                    };
-                                    let active = if a.index == idx { "  (active)" } else { "" };
-                                    out.push_str(&format!("  #{:<4} {}{}\n", a.index, short, active));
-                                }
+                                        "?".to_string()
+                                    }
+                                } else {
+                                    wallet
+                                        .derive_address_for(a.index)
+                                        .map(|a| a.to_string())
+                                        .unwrap_or_default()
+                                };
+                                let short = if a_addr.len() > 20 {
+                                    format!("{}...{}", &a_addr[..10], &a_addr[a_addr.len() - 8..])
+                                } else {
+                                    a_addr
+                                };
+                                let active = if a.index == idx { "  (active)" } else { "" };
+                                out.push_str(&format!("  #{:<4} {}{}\n", a.index, short, active));
                             }
-                            out.push_str("\nSwitch: account <index>");
-                            Ok(out)
                         }
-                    }
-                    Some(_) => {
-                        bail!("Account switching requires interactive mode. Use the REPL instead of --cmd.")
+                        out.push_str("\nSwitch: account <index>");
+                        Ok(out)
                     }
                 }
-            }
+                Some(_) => {
+                    bail!("Account switching requires interactive mode. Use the REPL instead of --cmd.")
+                }
+            },
 
             Command::Password => {
                 bail!("The password command requires interactive mode. Use the REPL instead of --cmd.")
@@ -482,12 +497,13 @@ impl Command {
                 }
             }
 
-            Command::VerifyMessage { message, signature, public_key } => {
-                let valid = crate::signer::verify_message(
-                    message.as_bytes(),
-                    signature,
-                    public_key,
-                )?;
+            Command::VerifyMessage {
+                message,
+                signature,
+                public_key,
+            } => {
+                let valid =
+                    crate::signer::verify_message(message.as_bytes(), signature, public_key)?;
                 if json_output {
                     Ok(serde_json::json!({
                         "valid": valid,
@@ -522,7 +538,10 @@ impl Command {
                 }
             }
 
-            Command::SendNft { object_id, recipient } => {
+            Command::SendNft {
+                object_id,
+                recipient,
+            } => {
                 let res = match resolved {
                     Some(r) => r.clone(),
                     None => service.resolve_recipient(recipient).await?,
@@ -541,10 +560,7 @@ impl Command {
                 } else {
                     Ok(format!(
                         "NFT sent!\n  Digest: {}\n  Status: {}\n  Object: {} -> {}",
-                        result.digest,
-                        result.status,
-                        object_id,
-                        res,
+                        result.digest, result.status, object_id, res,
                     ))
                 }
             }

@@ -46,8 +46,7 @@ impl App {
             );
         }
 
-        let header = row![title, Space::new().width(Fill)]
-            .align_y(iced::Alignment::Center);
+        let header = row![title, Space::new().width(Fill)].align_y(iced::Alignment::Center);
 
         let mut col = column![
             header,

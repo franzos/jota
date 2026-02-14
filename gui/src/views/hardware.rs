@@ -13,8 +13,8 @@ impl App {
             .style(styles::btn_ghost)
             .on_press(Message::GoTo(Screen::WalletSelect));
 
-        let name_input = text_input("Wallet name", &self.wallet_name)
-            .on_input(Message::WalletNameChanged);
+        let name_input =
+            text_input("Wallet name", &self.wallet_name).on_input(Message::WalletNameChanged);
         let pw_input = text_input("Password", &*self.password)
             .on_input(|s| Message::PasswordChanged(Zeroizing::new(s)))
             .secure(true);
@@ -33,7 +33,9 @@ impl App {
         }
 
         let mut col = column![
-            row![back, title].spacing(10).align_y(iced::Alignment::Center),
+            row![back, title]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
             Space::new().height(8),
             text("Wallet name").size(12).color(MUTED),
             name_input,
@@ -56,7 +58,11 @@ impl App {
         }
 
         col = col.push(Space::new().height(8));
-        col = col.push(text("Make sure the wallet app is open on your device.").size(12).color(MUTED));
+        col = col.push(
+            text("Make sure the wallet app is open on your device.")
+                .size(12)
+                .color(MUTED),
+        );
         col = col.push(Space::new().height(8));
         col = col.push(connect_btn);
 

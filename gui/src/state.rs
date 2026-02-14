@@ -1,7 +1,7 @@
-use iota_wallet_core::Address;
 use iota_wallet_core::network::NetworkClient;
 use iota_wallet_core::service::WalletService;
 use iota_wallet_core::wallet::{AccountRecord, NetworkConfig, Wallet};
+use iota_wallet_core::Address;
 use iota_wallet_core::ObjectId;
 use std::fmt;
 use std::sync::Arc;

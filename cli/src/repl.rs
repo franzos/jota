@@ -1,3 +1,4 @@
+use crate::Cli;
 /// REPL shell — Reedline-based interactive wallet session.
 use anyhow::{Context, Result};
 use iota_wallet_core::commands::Command;
@@ -8,7 +9,6 @@ use iota_wallet_core::wallet::Wallet;
 use reedline::{DefaultCompleter, DefaultPrompt, DefaultPromptSegment, Reedline, Signal};
 use std::sync::Arc;
 use zeroize::{Zeroize, Zeroizing};
-use crate::Cli;
 
 pub async fn run_repl(cli: &Cli) -> Result<()> {
     println!("IOTA Wallet v{}", env!("CARGO_PKG_VERSION"));
@@ -16,8 +16,7 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
     println!();
 
     let wallet_dir = cli.wallet_dir()?;
-    std::fs::create_dir_all(&wallet_dir)
-        .context("Failed to create wallet directory")?;
+    std::fs::create_dir_all(&wallet_dir).context("Failed to create wallet directory")?;
 
     // List existing wallets
     let wallets = list_wallets(&wallet_dir);
@@ -39,8 +38,7 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
     let (mut wallet, mut session_password) = if wallet_path.exists() {
         println!("Opening wallet '{wallet_name}'...");
         let password = Zeroizing::new(
-            rpassword::prompt_password("Password: ")
-                .context("Failed to read password")?,
+            rpassword::prompt_password("Password: ").context("Failed to read password")?,
         );
         #[allow(unused_mut)]
         let mut w = Wallet::open(&wallet_path, password.as_bytes())?;
@@ -80,11 +78,8 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
 
         let w = match action {
             WalletAction::CreateNew => {
-                let w = Wallet::create_new(
-                    wallet_path.clone(),
-                    password.as_bytes(),
-                    network_config,
-                )?;
+                let w =
+                    Wallet::create_new(wallet_path.clone(), password.as_bytes(), network_config)?;
                 println!();
                 println!("New wallet created in {}", wallet_path.display());
                 println!("IMPORTANT: Write down your seed phrase and keep it safe:");
@@ -146,17 +141,10 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
 
     let signer: Arc<dyn iota_wallet_core::Signer> = build_repl_signer(&wallet, cli)?;
 
-    let mut service = WalletService::new(
-        network,
-        signer,
-        effective_config.network.to_string(),
-    )
-    .with_notarization_package(notarization_pkg);
+    let mut service = WalletService::new(network, signer, effective_config.network.to_string())
+        .with_notarization_package(notarization_pkg);
 
-    println!(
-        "Wallet ready. Address: {}",
-        wallet.address()
-    );
+    println!("Wallet ready. Address: {}", wallet.address());
     println!("Type 'help' for a list of commands.");
     println!();
 
@@ -168,26 +156,43 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
     );
 
     let commands: Vec<String> = vec![
-        "balance".into(), "bal".into(),
-        "address".into(), "addr".into(),
-        "transfer".into(), "send".into(),
-        "sweep_all".into(), "sweep".into(),
-        "show_transfers".into(), "transfers".into(), "txs".into(),
-        "show_transfer".into(), "tx".into(),
-        "stake".into(), "unstake".into(), "stakes".into(),
-        "sign_message".into(), "sign".into(),
-        "verify_message".into(), "verify".into(),
+        "balance".into(),
+        "bal".into(),
+        "address".into(),
+        "addr".into(),
+        "transfer".into(),
+        "send".into(),
+        "sweep_all".into(),
+        "sweep".into(),
+        "show_transfers".into(),
+        "transfers".into(),
+        "txs".into(),
+        "show_transfer".into(),
+        "tx".into(),
+        "stake".into(),
+        "unstake".into(),
+        "stakes".into(),
+        "sign_message".into(),
+        "sign".into(),
+        "verify_message".into(),
+        "verify".into(),
         "notarize".into(),
-        "nfts".into(), "send_nft".into(),
-        "tokens".into(), "token_balances".into(),
+        "nfts".into(),
+        "send_nft".into(),
+        "tokens".into(),
+        "token_balances".into(),
         "status".into(),
         "faucet".into(),
         "seed".into(),
-        "account".into(), "acc".into(),
+        "account".into(),
+        "acc".into(),
         "reconnect".into(),
-        "password".into(), "passwd".into(),
+        "password".into(),
+        "passwd".into(),
         "help".into(),
-        "exit".into(), "quit".into(), "q".into(),
+        "exit".into(),
+        "quit".into(),
+        "q".into(),
     ];
     let completer = Box::new(DefaultCompleter::new(commands));
     let mut line_editor = Reedline::create().with_completer(completer);
@@ -224,7 +229,10 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                                                 eprintln!("Error saving wallet: {e}");
                                                 continue;
                                             }
-                                            let network = NetworkClient::new(&effective_config, cli.insecure)?;
+                                            let network = NetworkClient::new(
+                                                &effective_config,
+                                                cli.insecure,
+                                            )?;
                                             service = WalletService::new(
                                                 network,
                                                 Arc::new(new_signer),
@@ -273,20 +281,17 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                             Err(e) => eprintln!("Error: {e}"),
                         }
                     }
-                    Ok(Command::Reconnect) => {
-                        match service.reconnect_signer() {
-                            Ok(()) => println!("Device reconnected."),
-                            Err(e) => eprintln!("Error: {e}"),
-                        }
-                    }
+                    Ok(Command::Reconnect) => match service.reconnect_signer() {
+                        Ok(()) => println!("Device reconnected."),
+                        Err(e) => eprintln!("Error: {e}"),
+                    },
                     Ok(Command::Password) => {
                         if !prompt_confirm("Change wallet password?") {
                             println!("Cancelled.");
                             continue;
                         }
                         let old_pw = Zeroizing::new(
-                            rpassword::prompt_password("Current password: ")
-                                .unwrap_or_default(),
+                            rpassword::prompt_password("Current password: ").unwrap_or_default(),
                         );
                         let new_pw = match prompt_new_password() {
                             Ok(pw) => pw,
@@ -328,7 +333,10 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                                 continue;
                             }
                         }
-                        match cmd.execute(&wallet, &service, false, cli.insecure, resolved.as_ref()).await {
+                        match cmd
+                            .execute(&wallet, &service, false, cli.insecure, resolved.as_ref())
+                            .await
+                        {
                             Ok(output) => {
                                 if !output.is_empty() {
                                     println!("{output}");
@@ -357,7 +365,6 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
 
     Ok(())
 }
-
 
 enum WalletAction {
     CreateNew,
@@ -402,12 +409,10 @@ fn prompt_action() -> Result<WalletAction> {
 fn prompt_new_password() -> Result<Zeroizing<String>> {
     loop {
         let pass1 = Zeroizing::new(
-            rpassword::prompt_password("New password: ")
-                .context("Failed to read password")?,
+            rpassword::prompt_password("New password: ").context("Failed to read password")?,
         );
         let pass2 = Zeroizing::new(
-            rpassword::prompt_password("Confirm password: ")
-                .context("Failed to read password")?,
+            rpassword::prompt_password("Confirm password: ").context("Failed to read password")?,
         );
         if *pass1 != *pass2 {
             println!("Passwords do not match. Try again.");
@@ -425,14 +430,13 @@ fn prompt_confirm(prompt: &str) -> bool {
     print!("{prompt} [y/N]: ");
     std::io::stdout().flush().ok();
     let mut input = String::new();
-    std::io::stdin().read_line(&mut input).is_ok()
-        && input.trim().eq_ignore_ascii_case("y")
+    std::io::stdin().read_line(&mut input).is_ok() && input.trim().eq_ignore_ascii_case("y")
 }
 
 fn prompt_mnemonic() -> Result<Zeroizing<String>> {
     println!("Enter your seed phrase (12 or 24 words, space-separated):");
-    let mut input = rpassword::prompt_password("Seed phrase: ")
-        .context("Failed to read seed phrase")?;
+    let mut input =
+        rpassword::prompt_password("Seed phrase: ").context("Failed to read seed phrase")?;
     let trimmed = Zeroizing::new(input.trim().to_string());
     input.zeroize();
     if trimmed.split_whitespace().count() < 12 {

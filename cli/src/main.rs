@@ -1,6 +1,6 @@
 mod repl;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use iota_wallet_core::commands::Command;
 use iota_wallet_core::network::NetworkClient;
@@ -13,7 +13,11 @@ use std::sync::Arc;
 use zeroize::Zeroizing;
 
 #[derive(Parser)]
-#[command(name = "iota-wallet", about = "IOTA Wallet — Monero-inspired REPL", version)]
+#[command(
+    name = "iota-wallet",
+    about = "IOTA Wallet — Monero-inspired REPL",
+    version
+)]
 pub(crate) struct Cli {
     /// Wallet name (default: "default")
     #[arg(long, default_value = "default")]
@@ -62,7 +66,6 @@ pub(crate) struct Cli {
     /// On-chain notarization package ID (or set IOTA_NOTARIZATION_PKG_ID)
     #[arg(long, env = "IOTA_NOTARIZATION_PKG_ID")]
     notarization_package: Option<String>,
-
 }
 
 impl Cli {
@@ -112,10 +115,8 @@ impl Cli {
 
     /// Validate that at most one network flag is set.
     fn validate_network_flags(&self) -> Result<()> {
-        let count = self.testnet as u8
-            + self.mainnet as u8
-            + self.devnet as u8
-            + self.node.is_some() as u8;
+        let count =
+            self.testnet as u8 + self.mainnet as u8 + self.devnet as u8 + self.node.is_some() as u8;
         if count > 1 {
             bail!(
                 "Conflicting network flags. Use only one of --testnet, --mainnet, --devnet, or --node."
@@ -153,7 +154,6 @@ impl Cli {
     }
 }
 
-
 fn read_password_stdin() -> Result<Zeroizing<String>> {
     let mut password = String::new();
     std::io::stdin()
@@ -186,10 +186,7 @@ async fn run_oneshot(cli: &Cli, cmd_str: &str) -> Result<()> {
     let password = if cli.password_stdin {
         read_password_stdin()?
     } else {
-        Zeroizing::new(
-            rpassword::prompt_password("Password: ")
-                .context("Failed to read password")?,
-        )
+        Zeroizing::new(rpassword::prompt_password("Password: ").context("Failed to read password")?)
     };
 
     let wallet_path = cli.wallet_path()?;
@@ -210,12 +207,8 @@ async fn run_oneshot(cli: &Cli, cmd_str: &str) -> Result<()> {
 
     let signer: Arc<dyn iota_wallet_core::Signer> = build_signer(&wallet, cli)?;
 
-    let service = WalletService::new(
-        network,
-        signer,
-        effective_config.network.to_string(),
-    )
-    .with_notarization_package(notarization_pkg);
+    let service = WalletService::new(network, signer, effective_config.network.to_string())
+        .with_notarization_package(notarization_pkg);
 
     let command = Command::parse(cmd_str)?;
     if command == Command::Exit {
@@ -229,7 +222,9 @@ async fn run_oneshot(cli: &Cli, cmd_str: &str) -> Result<()> {
         None
     };
 
-    let output = command.execute(&wallet, &service, cli.json, cli.insecure, resolved.as_ref()).await?;
+    let output = command
+        .execute(&wallet, &service, cli.json, cli.insecure, resolved.as_ref())
+        .await?;
     if !output.is_empty() {
         println!("{output}");
     }

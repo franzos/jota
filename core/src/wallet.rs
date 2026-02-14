@@ -113,7 +113,11 @@ fn generate_mnemonic() -> Result<String> {
 
 /// Derive an Ed25519 keypair and address from a mnemonic + account index.
 fn derive_key(mnemonic: &str, account_index: u64) -> Result<(Ed25519PrivateKey, Address)> {
-    let idx = if account_index == 0 { None } else { Some(account_index) };
+    let idx = if account_index == 0 {
+        None
+    } else {
+        Some(account_index)
+    };
     let private_key = Ed25519PrivateKey::from_mnemonic(mnemonic, idx, None)
         .map_err(|e| anyhow::anyhow!("Failed to derive key from mnemonic: {e}"))?;
     let address = private_key.public_key().derive_address();
@@ -123,23 +127,18 @@ fn derive_key(mnemonic: &str, account_index: u64) -> Result<(Ed25519PrivateKey, 
 /// Insert an account index into the list if not already present, keeping it sorted.
 fn ensure_account_in_list(accounts: &mut Vec<AccountRecord>, index: u64) {
     if !accounts.iter().any(|a| a.index == index) {
-        accounts.push(AccountRecord { index, last_balance: None });
+        accounts.push(AccountRecord {
+            index,
+            last_balance: None,
+        });
         accounts.sort_by_key(|a| a.index);
     }
 }
 
 /// Serialize, encrypt, and write wallet data to disk, then update the meta file.
-fn persist_wallet_to_file(
-    path: &Path,
-    data: &WalletData,
-    password: &[u8],
-) -> Result<()> {
-    let json = Zeroizing::new(
-        serde_json::to_vec(data)
-            .context("Failed to serialize wallet data")?,
-    );
-    wallet_file::save_to_file(path, &json, password)
-        .context("Failed to save wallet file")?;
+fn persist_wallet_to_file(path: &Path, data: &WalletData, password: &[u8]) -> Result<()> {
+    let json = Zeroizing::new(serde_json::to_vec(data).context("Failed to serialize wallet data")?);
+    wallet_file::save_to_file(path, &json, password).context("Failed to save wallet file")?;
     crate::write_wallet_meta(path, data.wallet_type);
     Ok(())
 }
@@ -167,7 +166,10 @@ impl Wallet {
             mnemonic: Some(mnemonic),
             network_config,
             active_account_index: 0,
-            accounts: vec![AccountRecord { index: 0, last_balance: None }],
+            accounts: vec![AccountRecord {
+                index: 0,
+                last_balance: None,
+            }],
             wallet_type: WalletType::Software,
             address: None,
         };
@@ -194,7 +196,9 @@ impl Wallet {
 
         match data.wallet_type {
             WalletType::Software => {
-                let mnemonic = data.mnemonic.as_deref()
+                let mnemonic = data
+                    .mnemonic
+                    .as_deref()
                     .ok_or_else(|| anyhow::anyhow!("Software wallet is missing its mnemonic."))?;
                 let (private_key, address) = derive_key(mnemonic, data.active_account_index)?;
                 Ok(Self {
@@ -205,9 +209,11 @@ impl Wallet {
                 })
             }
             WalletType::Hardware(_) => {
-                let address = data.address.as_deref()
-                    .ok_or_else(|| anyhow::anyhow!("Hardware wallet is missing its stored address."))?;
-                let address = address.parse::<Address>()
+                let address = data.address.as_deref().ok_or_else(|| {
+                    anyhow::anyhow!("Hardware wallet is missing its stored address.")
+                })?;
+                let address = address
+                    .parse::<Address>()
                     .map_err(|e| anyhow::anyhow!("Invalid stored address: {e}"))?;
                 Ok(Self {
                     data,
@@ -232,7 +238,10 @@ impl Wallet {
             mnemonic: Some(mnemonic.to_string()),
             network_config,
             active_account_index: 0,
-            accounts: vec![AccountRecord { index: 0, last_balance: None }],
+            accounts: vec![AccountRecord {
+                index: 0,
+                last_balance: None,
+            }],
             wallet_type: WalletType::Software,
             address: None,
         };
@@ -259,7 +268,10 @@ impl Wallet {
             mnemonic: None,
             network_config,
             active_account_index: 0,
-            accounts: vec![AccountRecord { index: 0, last_balance: None }],
+            accounts: vec![AccountRecord {
+                index: 0,
+                last_balance: None,
+            }],
             wallet_type: WalletType::Hardware(hardware_kind),
             address: Some(address.to_string()),
         };
@@ -276,18 +288,13 @@ impl Wallet {
 
     /// Change the encryption password for a wallet file.
     /// Verifies the current password before re-encrypting.
-    pub fn change_password(
-        path: &Path,
-        old_password: &[u8],
-        new_password: &[u8],
-    ) -> Result<()> {
-        let plaintext = wallet_file::load_from_file(path, old_password)
-            .map_err(|e| match e {
-                wallet_file::WalletFileError::DecryptionFailed => {
-                    anyhow::anyhow!("Current password is incorrect")
-                }
-                other => anyhow::anyhow!("{other}"),
-            })?;
+    pub fn change_password(path: &Path, old_password: &[u8], new_password: &[u8]) -> Result<()> {
+        let plaintext = wallet_file::load_from_file(path, old_password).map_err(|e| match e {
+            wallet_file::WalletFileError::DecryptionFailed => {
+                anyhow::anyhow!("Current password is incorrect")
+            }
+            other => anyhow::anyhow!("{other}"),
+        })?;
         wallet_file::save_to_file(path, &plaintext, new_password)
             .context("Failed to save wallet with new password")?;
         Ok(())
@@ -306,8 +313,10 @@ impl Wallet {
     pub fn switch_account(&mut self, index: u64) -> Result<()> {
         match self.data.wallet_type {
             WalletType::Software => {
-                let mnemonic = self.data.mnemonic.as_deref()
-                    .ok_or_else(|| anyhow::anyhow!("Software wallet is missing its mnemonic."))?;
+                let mnemonic =
+                    self.data.mnemonic.as_deref().ok_or_else(|| {
+                        anyhow::anyhow!("Software wallet is missing its mnemonic.")
+                    })?;
                 let (private_key, address) = derive_key(mnemonic, index)?;
                 self.private_key = Some(private_key);
                 self.address = address;
@@ -332,7 +341,10 @@ impl Wallet {
     /// Derive the address for an account index without switching to it.
     /// Only available for software wallets.
     pub fn derive_address_for(&self, index: u64) -> Result<Address> {
-        let mnemonic = self.data.mnemonic.as_deref()
+        let mnemonic = self
+            .data
+            .mnemonic
+            .as_deref()
             .ok_or_else(|| anyhow::anyhow!("Cannot derive addresses for a hardware wallet."))?;
         let (_, address) = derive_key(mnemonic, index)?;
         Ok(address)
@@ -417,17 +429,17 @@ mod tests {
         let path = dir.path().join("test.wallet");
         let password = b"test-password";
 
-        let wallet = Wallet::create_new(
-            path.clone(),
-            password,
-            NetworkConfig::default(),
-        )
-        .unwrap();
+        let wallet = Wallet::create_new(path.clone(), password, NetworkConfig::default()).unwrap();
 
         // Mnemonic should be 24 words
-        let mnemonic = wallet.mnemonic().expect("software wallet should have mnemonic");
+        let mnemonic = wallet
+            .mnemonic()
+            .expect("software wallet should have mnemonic");
         let word_count = mnemonic.split_whitespace().count();
-        assert_eq!(word_count, 24, "expected 24-word mnemonic, got {word_count}");
+        assert_eq!(
+            word_count, 24,
+            "expected 24-word mnemonic, got {word_count}"
+        );
 
         // Address should be non-zero
         assert_ne!(*wallet.address(), Address::ZERO);
@@ -442,12 +454,7 @@ mod tests {
         let path = dir.path().join("test.wallet");
         let password = b"open-password";
 
-        let wallet1 = Wallet::create_new(
-            path.clone(),
-            password,
-            NetworkConfig::default(),
-        )
-        .unwrap();
+        let wallet1 = Wallet::create_new(path.clone(), password, NetworkConfig::default()).unwrap();
 
         let wallet2 = Wallet::open(&path, password).unwrap();
 
@@ -462,12 +469,7 @@ mod tests {
         let path2 = dir.path().join("recovered.wallet");
         let password = b"recover-password";
 
-        let original = Wallet::create_new(
-            path1,
-            password,
-            NetworkConfig::default(),
-        )
-        .unwrap();
+        let original = Wallet::create_new(path1, password, NetworkConfig::default()).unwrap();
 
         let recovered = Wallet::recover_from_mnemonic(
             path2,
@@ -485,12 +487,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("test.wallet");
 
-        Wallet::create_new(
-            path.clone(),
-            b"correct",
-            NetworkConfig::default(),
-        )
-        .unwrap();
+        Wallet::create_new(path.clone(), b"correct", NetworkConfig::default()).unwrap();
 
         let result = Wallet::open(&path, b"wrong");
         assert!(result.is_err());
@@ -515,12 +512,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("test.wallet");
 
-        let wallet = Wallet::create_new(
-            path.clone(),
-            b"old-password",
-            NetworkConfig::default(),
-        )
-        .unwrap();
+        let wallet =
+            Wallet::create_new(path.clone(), b"old-password", NetworkConfig::default()).unwrap();
         let original_address = *wallet.address();
 
         // Change password
@@ -540,12 +533,7 @@ mod tests {
         let path = dir.path().join("test.wallet");
         let password = b"test-password";
 
-        let mut wallet = Wallet::create_new(
-            path,
-            password,
-            NetworkConfig::default(),
-        )
-        .unwrap();
+        let mut wallet = Wallet::create_new(path, password, NetworkConfig::default()).unwrap();
 
         let addr0 = *wallet.address();
         assert_eq!(wallet.account_index(), 0);
@@ -553,11 +541,19 @@ mod tests {
 
         wallet.switch_account(1).unwrap();
         assert_eq!(wallet.account_index(), 1);
-        assert_ne!(*wallet.address(), addr0, "account 1 should have a different address");
+        assert_ne!(
+            *wallet.address(),
+            addr0,
+            "account 1 should have a different address"
+        );
         assert_eq!(wallet.known_accounts().len(), 2);
 
         wallet.switch_account(0).unwrap();
-        assert_eq!(*wallet.address(), addr0, "switching back to 0 should restore the original address");
+        assert_eq!(
+            *wallet.address(),
+            addr0,
+            "switching back to 0 should restore the original address"
+        );
         // Still 2 known accounts (0 and 1)
         assert_eq!(wallet.known_accounts().len(), 2);
 
@@ -575,12 +571,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("test.wallet");
 
-        Wallet::create_new(
-            path.clone(),
-            b"correct",
-            NetworkConfig::default(),
-        )
-        .unwrap();
+        Wallet::create_new(path.clone(), b"correct", NetworkConfig::default()).unwrap();
 
         let result = Wallet::change_password(&path, b"wrong", b"new");
         assert!(result.is_err());
@@ -599,12 +590,7 @@ mod tests {
         };
 
         // Create wallet with devnet config
-        let wallet = Wallet::create_new(
-            path.clone(),
-            password,
-            devnet_config.clone(),
-        )
-        .unwrap();
+        let wallet = Wallet::create_new(path.clone(), password, devnet_config.clone()).unwrap();
 
         let original_mnemonic = wallet.mnemonic().unwrap().to_string();
         let original_address = *wallet.address();

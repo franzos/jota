@@ -54,8 +54,16 @@ impl<Message> canvas::Program<Message> for BalanceChart {
             let w = size.width - pad_left - pad_right;
             let h = size.height - pad_top - pad_bottom;
 
-            let min_bal = self.data.iter().map(|(_, b)| *b).fold(f64::INFINITY, f64::min);
-            let max_bal = self.data.iter().map(|(_, b)| *b).fold(f64::NEG_INFINITY, f64::max);
+            let min_bal = self
+                .data
+                .iter()
+                .map(|(_, b)| *b)
+                .fold(f64::INFINITY, f64::min);
+            let max_bal = self
+                .data
+                .iter()
+                .map(|(_, b)| *b)
+                .fold(f64::NEG_INFINITY, f64::max);
             let range = (max_bal - min_bal).max(0.001);
 
             let n = self.data.len();
@@ -66,10 +74,7 @@ impl<Message> canvas::Program<Message> for BalanceChart {
                 let val = min_bal + frac * range;
                 let y = pad_top + h - (frac as f32 * h);
 
-                let grid = canvas::Path::line(
-                    Point::new(pad_left, y),
-                    Point::new(pad_left + w, y),
-                );
+                let grid = canvas::Path::line(Point::new(pad_left, y), Point::new(pad_left + w, y));
                 frame.stroke(
                     &grid,
                     canvas::Stroke::default().with_color(BORDER).with_width(0.5),
@@ -105,7 +110,9 @@ impl<Message> canvas::Program<Message> for BalanceChart {
                 });
                 frame.stroke(
                     &line,
-                    canvas::Stroke::default().with_color(PRIMARY).with_width(2.0),
+                    canvas::Stroke::default()
+                        .with_color(PRIMARY)
+                        .with_width(2.0),
                 );
             }
             for (i, (_, bal)) in self.data.iter().enumerate() {

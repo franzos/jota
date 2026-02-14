@@ -3,7 +3,6 @@ use crate::state::{Screen, WalletInfo};
 use crate::App;
 use iced::widget::qr_code;
 use iced::Task;
-use iota_wallet_core::{ObjectId, Recipient, SignedMessage, verify_message};
 use iota_wallet_core::cache::TransactionCache;
 use iota_wallet_core::display::{parse_iota_amount, parse_token_amount};
 use iota_wallet_core::network::{
@@ -13,6 +12,7 @@ use iota_wallet_core::network::{
 use iota_wallet_core::service::WalletService;
 use iota_wallet_core::wallet::{Network, NetworkConfig, Wallet};
 use iota_wallet_core::{list_wallets, validate_wallet_name};
+use iota_wallet_core::{verify_message, ObjectId, Recipient, SignedMessage};
 use std::sync::Arc;
 use zeroize::{Zeroize, Zeroizing};
 
@@ -253,8 +253,7 @@ impl App {
                 Task::perform(
                     async move {
                         std::fs::create_dir_all(path.parent().expect("wallet path has parent"))?;
-                        let wallet =
-                            Wallet::recover_from_mnemonic(path, &pw, &mnemonic, config)?;
+                        let wallet = Wallet::recover_from_mnemonic(path, &pw, &mnemonic, config)?;
                         WalletInfo::from_wallet(&wallet)
                     },
                     |r: Result<WalletInfo, anyhow::Error>| {
@@ -318,8 +317,16 @@ impl App {
                             .map_err(|e| anyhow::anyhow!("Task failed: {e}"))??;
 
                             let address = *signer.address();
-                            std::fs::create_dir_all(path.parent().expect("wallet path has parent"))?;
-                            let wallet = Wallet::create_hardware(path, &pw, address, config, iota_wallet_core::HardwareKind::Ledger)?;
+                            std::fs::create_dir_all(
+                                path.parent().expect("wallet path has parent"),
+                            )?;
+                            let wallet = Wallet::create_hardware(
+                                path,
+                                &pw,
+                                address,
+                                config,
+                                iota_wallet_core::HardwareKind::Ledger,
+                            )?;
                             return WalletInfo::from_wallet_with_signer(&wallet, Arc::new(signer));
                         }
 
@@ -545,7 +552,11 @@ impl App {
                     }
                 };
 
-                let token = self.selected_token.as_ref().filter(|t| !t.is_iota()).cloned();
+                let token = self
+                    .selected_token
+                    .as_ref()
+                    .filter(|t| !t.is_iota())
+                    .cloned();
 
                 if let Some(token) = token {
                     let amount_str = self.amount.clone();
@@ -563,7 +574,9 @@ impl App {
                             if amount == 0 {
                                 anyhow::bail!("Amount must be greater than 0");
                             }
-                            let result = service.send_token(resolved.address, &meta.coin_type, amount).await?;
+                            let result = service
+                                .send_token(resolved.address, &meta.coin_type, amount)
+                                .await?;
                             Ok(result.digest)
                         },
                         |r: Result<String, anyhow::Error>| {
@@ -638,10 +651,7 @@ impl App {
             }
 
             Message::OpenExplorer(digest) => {
-                let network = self
-                    .wallet_info
-                    .as_ref()
-                    .map(|i| &i.network_config.network);
+                let network = self.wallet_info.as_ref().map(|i| &i.network_config.network);
                 let query = match network {
                     Some(Network::Mainnet) | None => "",
                     Some(Network::Testnet) => "?network=testnet",
@@ -899,7 +909,11 @@ impl App {
                 let name = self.selected_wallet.clone().unwrap_or_default();
                 let path = self.wallet_dir.join(format!("{name}.wallet"));
                 let pw = self.session_password.clone();
-                let is_hardware = self.wallet_info.as_ref().map(|i| i.is_hardware).unwrap_or(false);
+                let is_hardware = self
+                    .wallet_info
+                    .as_ref()
+                    .map(|i| i.is_hardware)
+                    .unwrap_or(false);
                 self.loading += 1;
                 self.error_message = None;
 
@@ -993,9 +1007,7 @@ impl App {
                 self.error_message = None;
 
                 Task::perform(
-                    async move {
-                        service.sign_message(msg.as_bytes())
-                    },
+                    async move { service.sign_message(msg.as_bytes()) },
                     |r: Result<SignedMessage, anyhow::Error>| {
                         Message::SignCompleted(r.map_err(|e| e.to_string()))
                     },
@@ -1060,9 +1072,7 @@ impl App {
                 self.error_message = None;
 
                 Task::perform(
-                    async move {
-                        verify_message(msg.as_bytes(), &sig, &pk)
-                    },
+                    async move { verify_message(msg.as_bytes(), &sig, &pk) },
                     |r: Result<bool, anyhow::Error>| {
                         Message::VerifyCompleted(r.map_err(|e| e.to_string()))
                     },
@@ -1143,11 +1153,8 @@ impl App {
                     match NetworkClient::new(&config, false) {
                         Ok(client) => {
                             let signer = info.service.signer().clone();
-                            let service = WalletService::new(
-                                client,
-                                signer,
-                                network.to_string(),
-                            ).with_notarization_package(info.notarization_package_config);
+                            let service = WalletService::new(client, signer, network.to_string())
+                                .with_notarization_package(info.notarization_package_config);
                             info.notarization_package = service.notarization_package();
                             info.service = Arc::new(service);
                         }
@@ -1271,15 +1278,26 @@ impl App {
         if self.password != self.password_confirm {
             return Some("Passwords don't match".into());
         }
-        if self.wallet_entries.iter().any(|e| e.name == self.wallet_name.trim()) {
-            return Some(format!("Wallet '{}' already exists", self.wallet_name.trim()));
+        if self
+            .wallet_entries
+            .iter()
+            .any(|e| e.name == self.wallet_name.trim())
+        {
+            return Some(format!(
+                "Wallet '{}' already exists",
+                self.wallet_name.trim()
+            ));
         }
         None
     }
 
     fn compute_balance_history(&mut self) {
-        let Some(current_balance) = self.balance else { return };
-        if self.epoch_deltas.is_empty() { return; }
+        let Some(current_balance) = self.balance else {
+            return;
+        };
+        if self.epoch_deltas.is_empty() {
+            return;
+        }
 
         let start = self.epoch_deltas.len().saturating_sub(30);
         let recent = &self.epoch_deltas[start..];
@@ -1313,9 +1331,7 @@ impl App {
 
         Task::batch([
             Task::perform(
-                async move {
-                    svc1.balance().await
-                },
+                async move { svc1.balance().await },
                 |r: Result<u64, anyhow::Error>| {
                     Message::BalanceUpdated(r.map_err(|e| e.to_string()))
                 },
@@ -1324,7 +1340,8 @@ impl App {
                 async move {
                     svc2.sync_transactions().await?;
                     let cache = TransactionCache::open()?;
-                    let page = cache.query(&network_name, &address_str, &TransactionFilter::All, 25, 0)?;
+                    let page =
+                        cache.query(&network_name, &address_str, &TransactionFilter::All, 25, 0)?;
                     let deltas = cache.query_epoch_deltas(&network_name, &address_str)?;
                     Ok((page.transactions, page.total, deltas))
                 },
@@ -1363,7 +1380,13 @@ impl App {
         Task::perform(
             async move {
                 let cache = TransactionCache::open()?;
-                let page = cache.query(&network_str, &address_str, &TransactionFilter::All, 25, offset)?;
+                let page = cache.query(
+                    &network_str,
+                    &address_str,
+                    &TransactionFilter::All,
+                    25,
+                    offset,
+                )?;
                 Ok((page.transactions, page.total, Vec::new()))
             },
             |r: Result<(Vec<TransactionSummary>, u32, Vec<(u64, i64)>), anyhow::Error>| {
@@ -1380,9 +1403,7 @@ impl App {
         let service = info.service.clone();
 
         Task::perform(
-            async move {
-                service.get_nfts().await
-            },
+            async move { service.get_nfts().await },
             |r: Result<Vec<NftSummary>, anyhow::Error>| {
                 Message::NftsLoaded(r.map_err(|e| e.to_string()))
             },
@@ -1397,9 +1418,7 @@ impl App {
         let service = info.service.clone();
 
         Task::perform(
-            async move {
-                service.get_stakes().await
-            },
+            async move { service.get_stakes().await },
             |r: Result<Vec<StakedIotaSummary>, anyhow::Error>| {
                 Message::StakesLoaded(r.map_err(|e| e.to_string()))
             },

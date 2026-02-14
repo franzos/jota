@@ -14,8 +14,8 @@ impl App {
 
         let title = text("Create New Wallet").size(24);
 
-        let name = text_input("Wallet name", &self.wallet_name)
-            .on_input(Message::WalletNameChanged);
+        let name =
+            text_input("Wallet name", &self.wallet_name).on_input(Message::WalletNameChanged);
         let pw = text_input("Password", &self.password)
             .on_input(|s| Message::PasswordChanged(Zeroizing::new(s)))
             .secure(true);
@@ -36,15 +36,9 @@ impl App {
             .style(styles::btn_secondary)
             .on_press(Message::GoTo(Screen::WalletSelect));
 
-        let mut col = column![
-            title,
-            Space::new().height(8),
-            name,
-            pw,
-            pw2,
-        ]
-        .spacing(5)
-        .max_width(400);
+        let mut col = column![title, Space::new().height(8), name, pw, pw2,]
+            .spacing(5)
+            .max_width(400);
 
         if let Some(hint) = &form_error {
             col = col.push(Space::new().height(4));
@@ -69,11 +63,10 @@ impl App {
 
     fn view_mnemonic_display(&self, mnemonic: &str) -> Element<Message> {
         let title = text("Write Down Your Mnemonic").size(24);
-        let warning = text(
-            "Save these 24 words in a safe place. You will need them to recover your wallet.",
-        )
-        .size(14)
-        .color(styles::WARNING);
+        let warning =
+            text("Save these 24 words in a safe place. You will need them to recover your wallet.")
+                .size(14)
+                .color(styles::WARNING);
 
         let words: Vec<String> = mnemonic.split_whitespace().map(String::from).collect();
 

@@ -1,6 +1,8 @@
-use crate::TokenOption;
 use crate::state::{Screen, SignMode, WalletInfo};
-use iota_wallet_core::network::{CoinMeta, NftSummary, StakedIotaSummary, TokenBalance, TransactionSummary};
+use crate::TokenOption;
+use iota_wallet_core::network::{
+    CoinMeta, NftSummary, StakedIotaSummary, TokenBalance, TransactionSummary,
+};
 use iota_wallet_core::wallet::Network;
 use iota_wallet_core::SignedMessage;
 use zeroize::Zeroizing;

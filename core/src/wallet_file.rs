@@ -56,8 +56,7 @@ pub fn encrypt(plaintext: &[u8], password: &[u8]) -> Result<Vec<u8>, WalletFileE
     rand::thread_rng().fill_bytes(&mut nonce_bytes);
 
     let mut key = derive_key(password, &salt)?;
-    let cipher = Aes256Gcm::new_from_slice(&key)
-        .map_err(|_| WalletFileError::DecryptionFailed)?;
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| WalletFileError::DecryptionFailed)?;
     key.zeroize();
 
     let nonce = Nonce::from_slice(&nonce_bytes);
@@ -85,8 +84,7 @@ pub fn decrypt(data: &[u8], password: &[u8]) -> Result<Zeroizing<Vec<u8>>, Walle
     let ciphertext = &data[SALT_LEN + NONCE_LEN..];
 
     let mut key = derive_key(password, salt)?;
-    let cipher = Aes256Gcm::new_from_slice(&key)
-        .map_err(|_| WalletFileError::DecryptionFailed)?;
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| WalletFileError::DecryptionFailed)?;
     key.zeroize();
 
     let nonce = Nonce::from_slice(nonce_bytes);

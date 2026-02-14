@@ -9,23 +9,20 @@ impl App {
     pub(crate) fn view_staking(&self) -> Element<Message> {
         let title = text("Staking").size(24);
 
-        let header = row![title, Space::new().width(Fill)]
-            .align_y(iced::Alignment::Center);
+        let header = row![title, Space::new().width(Fill)].align_y(iced::Alignment::Center);
 
         let mut col = column![header].spacing(16);
 
         // -- Active stakes card --
-        let mut stakes_content = column![
-            row![
-                text("Active Stakes").size(16),
-                Space::new().width(Fill),
-                button(text("Refresh").size(13))
-                    .padding([8, 16])
-                    .style(styles::btn_secondary)
-                    .on_press(Message::RefreshStakes),
-            ]
-            .align_y(iced::Alignment::Center),
+        let mut stakes_content = column![row![
+            text("Active Stakes").size(16),
+            Space::new().width(Fill),
+            button(text("Refresh").size(13))
+                .padding([8, 16])
+                .style(styles::btn_secondary)
+                .on_press(Message::RefreshStakes),
         ]
+        .align_y(iced::Alignment::Center),]
         .spacing(12);
 
         if self.loading > 0 && self.stakes.is_empty() {
@@ -34,10 +31,22 @@ impl App {
             stakes_content = stakes_content.push(text("No active stakes.").size(14).color(MUTED));
         } else {
             let header = row![
-                text("Principal").size(11).color(MUTED).width(Length::Fixed(110.0)),
-                text("Reward").size(11).color(MUTED).width(Length::Fixed(110.0)),
-                text("Epoch").size(11).color(MUTED).width(Length::Fixed(60.0)),
-                text("Status").size(11).color(MUTED).width(Length::Fixed(70.0)),
+                text("Principal")
+                    .size(11)
+                    .color(MUTED)
+                    .width(Length::Fixed(110.0)),
+                text("Reward")
+                    .size(11)
+                    .color(MUTED)
+                    .width(Length::Fixed(110.0)),
+                text("Epoch")
+                    .size(11)
+                    .color(MUTED)
+                    .width(Length::Fixed(60.0)),
+                text("Status")
+                    .size(11)
+                    .color(MUTED)
+                    .width(Length::Fixed(70.0)),
                 text("").size(11),
             ]
             .spacing(8);
@@ -66,10 +75,17 @@ impl App {
                 };
 
                 let mut stake_row = row![
-                    text(format_balance(stake.principal)).size(12).width(Length::Fixed(110.0)),
+                    text(format_balance(stake.principal))
+                        .size(12)
+                        .width(Length::Fixed(110.0)),
                     text(reward_str).size(12).width(Length::Fixed(110.0)),
-                    text(format!("{}", stake.stake_activation_epoch)).size(12).width(Length::Fixed(60.0)),
-                    text(format!("{}", stake.status)).size(12).color(status_color).width(Length::Fixed(70.0)),
+                    text(format!("{}", stake.stake_activation_epoch))
+                        .size(12)
+                        .width(Length::Fixed(60.0)),
+                    text(format!("{}", stake.status))
+                        .size(12)
+                        .color(status_color)
+                        .width(Length::Fixed(70.0)),
                 ]
                 .spacing(8)
                 .align_y(iced::Alignment::Center);
@@ -120,9 +136,7 @@ impl App {
                     .color(styles::ACCENT)
                     .into(),
             ),
-            Some(Err(e)) => Some(
-                text(e.as_str()).size(11).color(styles::DANGER).into(),
-            ),
+            Some(Err(e)) => Some(text(e.as_str()).size(11).color(styles::DANGER).into()),
             None => None,
         };
 

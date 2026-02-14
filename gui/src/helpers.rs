@@ -14,9 +14,18 @@ impl App {
     ) -> Element<'a, Message> {
         let header = row![
             text("Dir").size(11).color(MUTED).width(Length::Fixed(35.0)),
-            text("Sender").size(11).color(MUTED).width(Length::Fixed(140.0)),
-            text("Received").size(11).color(MUTED).width(Length::Fixed(110.0)),
-            text("Sent").size(11).color(MUTED).width(Length::Fixed(110.0)),
+            text("Sender")
+                .size(11)
+                .color(MUTED)
+                .width(Length::Fixed(140.0)),
+            text("Received")
+                .size(11)
+                .color(MUTED)
+                .width(Length::Fixed(110.0)),
+            text("Sent")
+                .size(11)
+                .color(MUTED)
+                .width(Length::Fixed(110.0)),
             text("Digest").size(11).color(MUTED),
         ]
         .spacing(8);
@@ -111,7 +120,10 @@ impl App {
                 if let Some(ref sender) = tx.sender {
                     detail = detail.push(
                         row![
-                            text("Sender:").size(11).color(MUTED).width(Length::Fixed(60.0)),
+                            text("Sender:")
+                                .size(11)
+                                .color(MUTED)
+                                .width(Length::Fixed(60.0)),
                             text(sender.as_str()).size(11).font(Font::MONOSPACE),
                         ]
                         .spacing(8),
@@ -121,7 +133,10 @@ impl App {
                 if let Some(amount) = tx.amount {
                     detail = detail.push(
                         row![
-                            text("Amount:").size(11).color(MUTED).width(Length::Fixed(60.0)),
+                            text("Amount:")
+                                .size(11)
+                                .color(MUTED)
+                                .width(Length::Fixed(60.0)),
                             text(format_balance(amount)).size(11).font(styles::BOLD),
                         ]
                         .spacing(8),
@@ -131,7 +146,10 @@ impl App {
                 if let Some(fee) = tx.fee {
                     detail = detail.push(
                         row![
-                            text("Fee:").size(11).color(MUTED).width(Length::Fixed(60.0)),
+                            text("Fee:")
+                                .size(11)
+                                .color(MUTED)
+                                .width(Length::Fixed(60.0)),
                             text(format_balance(fee)).size(11),
                         ]
                         .spacing(8),
@@ -140,7 +158,10 @@ impl App {
 
                 detail = detail.push(
                     row![
-                        text("Digest:").size(11).color(MUTED).width(Length::Fixed(60.0)),
+                        text("Digest:")
+                            .size(11)
+                            .color(MUTED)
+                            .width(Length::Fixed(60.0)),
                         text(&tx.digest).size(11).font(Font::MONOSPACE),
                     ]
                     .spacing(8),
@@ -148,7 +169,10 @@ impl App {
 
                 detail = detail.push(
                     row![
-                        text("Epoch:").size(11).color(MUTED).width(Length::Fixed(60.0)),
+                        text("Epoch:")
+                            .size(11)
+                            .color(MUTED)
+                            .width(Length::Fixed(60.0)),
                         text(format!("{}", tx.epoch)).size(11),
                     ]
                     .spacing(8),
@@ -161,9 +185,7 @@ impl App {
                 detail = detail.push(Space::new().height(4));
                 detail = detail.push(explorer);
 
-                let detail_container = container(detail)
-                    .width(Fill)
-                    .style(styles::card_flat);
+                let detail_container = container(detail).width(Fill).style(styles::card_flat);
                 tx_col = tx_col.push(detail_container);
             }
         }

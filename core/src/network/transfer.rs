@@ -1,15 +1,15 @@
-use anyhow::{Context, Result, bail};
-use iota_sdk::graphql_client::WaitForTx;
+use anyhow::{bail, Context, Result};
 use iota_sdk::graphql_client::pagination::PaginationFilter;
-use iota_sdk::transaction_builder::TransactionBuilder;
+use iota_sdk::graphql_client::WaitForTx;
 use iota_sdk::transaction_builder::unresolved::Argument as UnresolvedArg;
+use iota_sdk::transaction_builder::TransactionBuilder;
 use iota_sdk::types::{
     Address, Argument, Command as TxCommand, Input, Object, ObjectId, StructTag, Transaction,
     TransactionKind,
 };
 
-use super::NetworkClient;
 use super::types::TransferResult;
+use super::NetworkClient;
 use crate::signer::Signer;
 
 impl NetworkClient {
@@ -62,7 +62,9 @@ impl NetworkClient {
             bail!("Transaction would fail: {err}");
         }
 
-        let objects = self.fetch_input_objects(tx).await
+        let objects = self
+            .fetch_input_objects(tx)
+            .await
             .context("Failed to fetch input objects for signing")?;
         let signature = signer.sign_transaction(tx, &objects)?;
 
@@ -96,7 +98,10 @@ impl NetworkClient {
     ) -> Result<TransferResult> {
         let mut builder = TransactionBuilder::new(*sender).with_client(&self.client);
         builder.send_iota(recipient, amount);
-        let tx = builder.finish().await.context("Failed to build transaction")?;
+        let tx = builder
+            .finish()
+            .await
+            .context("Failed to build transaction")?;
         self.sign_and_execute(&tx, signer).await
     }
 
@@ -118,7 +123,10 @@ impl NetworkClient {
         // and the recipient receives the remainder.
         let mut builder = TransactionBuilder::new(*sender).with_client(&self.client);
         builder.transfer_objects(recipient, [UnresolvedArg::Gas]);
-        let tx = builder.finish().await.context("Failed to build sweep transaction")?;
+        let tx = builder
+            .finish()
+            .await
+            .context("Failed to build sweep transaction")?;
 
         let result = self.sign_and_execute(&tx, signer).await?;
         // net_gas_usage is signed: positive = gas consumed, negative = rebate.
@@ -142,7 +150,8 @@ impl NetworkClient {
         coin_type: &str,
         amount: u64,
     ) -> Result<TransferResult> {
-        let struct_tag: StructTag = coin_type.parse()
+        let struct_tag: StructTag = coin_type
+            .parse()
             .map_err(|e| anyhow::anyhow!("Invalid coin type '{coin_type}': {e}"))?;
 
         // Collect all coin ObjectIds for this type
@@ -180,7 +189,10 @@ impl NetworkClient {
             builder.send_coins(coin_ids, recipient, amount);
         }
 
-        let tx = builder.finish().await.context("Failed to build token transfer transaction")?;
+        let tx = builder
+            .finish()
+            .await
+            .context("Failed to build token transfer transaction")?;
         self.sign_and_execute(&tx, signer).await
     }
 }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use iota_sdk::types::{Address, Digest, ObjectId};
 
 use crate::network::{
@@ -9,7 +9,7 @@ use crate::network::{
     TransactionDetailsSummary, TransferResult,
 };
 use crate::recipient::{Recipient, ResolvedRecipient};
-use crate::signer::{Signer, SignedMessage};
+use crate::signer::{SignedMessage, Signer};
 
 const COIN_META_CACHE_LIMIT: usize = 256;
 
@@ -22,11 +22,7 @@ pub struct WalletService {
 }
 
 impl WalletService {
-    pub fn new(
-        network: NetworkClient,
-        signer: Arc<dyn Signer>,
-        network_name: String,
-    ) -> Self {
+    pub fn new(network: NetworkClient, signer: Arc<dyn Signer>, network_name: String) -> Self {
         Self {
             network,
             signer,
@@ -59,7 +55,12 @@ impl WalletService {
 
     pub async fn send(&self, recipient: Address, amount: u64) -> Result<TransferResult> {
         self.network
-            .send_iota(self.signer.as_ref(), self.signer.address(), recipient, amount)
+            .send_iota(
+                self.signer.as_ref(),
+                self.signer.address(),
+                recipient,
+                amount,
+            )
             .await
     }
 
@@ -71,13 +72,22 @@ impl WalletService {
 
     pub async fn stake(&self, validator: Address, amount: u64) -> Result<TransferResult> {
         self.network
-            .stake_iota(self.signer.as_ref(), self.signer.address(), validator, amount)
+            .stake_iota(
+                self.signer.as_ref(),
+                self.signer.address(),
+                validator,
+                amount,
+            )
             .await
     }
 
     pub async fn unstake(&self, staked_object_id: ObjectId) -> Result<TransferResult> {
         self.network
-            .unstake_iota(self.signer.as_ref(), self.signer.address(), staked_object_id)
+            .unstake_iota(
+                self.signer.as_ref(),
+                self.signer.address(),
+                staked_object_id,
+            )
             .await
     }
 
@@ -97,9 +107,18 @@ impl WalletService {
         self.network.get_nfts(self.signer.address()).await
     }
 
-    pub async fn send_nft(&self, object_id: ObjectId, recipient: Address) -> Result<TransferResult> {
+    pub async fn send_nft(
+        &self,
+        object_id: ObjectId,
+        recipient: Address,
+    ) -> Result<TransferResult> {
         self.network
-            .send_nft(self.signer.as_ref(), self.signer.address(), object_id, recipient)
+            .send_nft(
+                self.signer.as_ref(),
+                self.signer.address(),
+                object_id,
+                recipient,
+            )
             .await
     }
 
@@ -158,7 +177,13 @@ impl WalletService {
             )
         })?;
         self.network
-            .notarize(self.signer.as_ref(), self.signer.address(), pkg, message, description)
+            .notarize(
+                self.signer.as_ref(),
+                self.signer.address(),
+                pkg,
+                message,
+                description,
+            )
             .await
     }
 
@@ -185,14 +210,17 @@ impl WalletService {
         } else {
             // Search wallet balances for a matching coin type
             let balances = self.get_token_balances().await?;
-            let matches: Vec<_> = balances.iter().filter(|b| {
-                let parts: Vec<&str> = b.coin_type.split("::").collect();
-                if let Some(name) = parts.last() {
-                    name.to_lowercase() == lower
-                } else {
-                    false
-                }
-            }).collect();
+            let matches: Vec<_> = balances
+                .iter()
+                .filter(|b| {
+                    let parts: Vec<&str> = b.coin_type.split("::").collect();
+                    if let Some(name) = parts.last() {
+                        name.to_lowercase() == lower
+                    } else {
+                        false
+                    }
+                })
+                .collect();
             match matches.len() {
                 0 => bail!(
                     "No token matching '{alias}' found in wallet. Use 'tokens' to list available tokens."
@@ -231,7 +259,13 @@ impl WalletService {
         amount: u64,
     ) -> Result<TransferResult> {
         self.network
-            .send_token(self.signer.as_ref(), self.signer.address(), recipient, coin_type, amount)
+            .send_token(
+                self.signer.as_ref(),
+                self.signer.address(),
+                recipient,
+                coin_type,
+                amount,
+            )
             .await
     }
 
@@ -243,14 +277,17 @@ impl WalletService {
     ) -> Result<(TransferResult, u128)> {
         // Get the total balance for this token
         let balances = self.get_token_balances().await?;
-        let token_balance = balances.iter().find(|b| b.coin_type == coin_type)
+        let token_balance = balances
+            .iter()
+            .find(|b| b.coin_type == coin_type)
             .ok_or_else(|| anyhow::anyhow!("No balance found for token type '{coin_type}'"))?;
         let total = token_balance.total_balance;
         if total == 0 {
             bail!("Nothing to sweep — token balance is 0.");
         }
 
-        let result = self.network
+        let result = self
+            .network
             .send_token(
                 self.signer.as_ref(),
                 self.signer.address(),

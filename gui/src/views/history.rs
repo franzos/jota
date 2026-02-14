@@ -11,8 +11,8 @@ impl App {
             .style(styles::btn_secondary)
             .on_press(Message::RefreshHistory);
 
-        let header = row![title, Space::new().width(Fill), refresh]
-            .align_y(iced::Alignment::Center);
+        let header =
+            row![title, Space::new().width(Fill), refresh].align_y(iced::Alignment::Center);
 
         let mut col = column![header].spacing(16);
 
@@ -24,10 +24,8 @@ impl App {
                     .style(styles::card),
             );
         } else {
-            let mut card_content = column![
-                self.view_tx_table(&self.transactions, true),
-            ]
-            .spacing(12);
+            let mut card_content =
+                column![self.view_tx_table(&self.transactions, true),].spacing(12);
 
             // Pagination
             let page_num = self.history_page + 1;

@@ -23,12 +23,10 @@ impl App {
             col = col.push(text("Loading...").size(14).color(MUTED));
         } else if self.nfts.is_empty() {
             col = col.push(
-                container(
-                    text("No NFTs found.").size(14).color(MUTED),
-                )
-                .padding(20)
-                .width(Fill)
-                .style(styles::card),
+                container(text("No NFTs found.").size(14).color(MUTED))
+                    .padding(20)
+                    .width(Fill)
+                    .style(styles::card),
             );
         } else {
             for nft in &self.nfts {
@@ -40,7 +38,11 @@ impl App {
                 };
 
                 let name = nft.name.as_deref().unwrap_or("(unnamed)");
-                let type_short = nft.object_type.split("::").last().unwrap_or(&nft.object_type);
+                let type_short = nft
+                    .object_type
+                    .split("::")
+                    .last()
+                    .unwrap_or(&nft.object_type);
 
                 let mut card_content = column![
                     text(name).size(16),
@@ -59,10 +61,11 @@ impl App {
                 let is_selected = self.send_nft_object_id.as_deref() == Some(&id_str);
 
                 if is_selected {
-                    let recipient_input = text_input("Recipient address or .iota name", &self.send_nft_recipient)
-                        .on_input(Message::SendNftRecipientChanged)
-                        .on_submit(Message::ConfirmSendNft)
-                        .size(13);
+                    let recipient_input =
+                        text_input("Recipient address or .iota name", &self.send_nft_recipient)
+                            .on_input(Message::SendNftRecipientChanged)
+                            .on_submit(Message::ConfirmSendNft)
+                            .size(13);
 
                     let mut send_btn = button(text("Confirm").size(12))
                         .padding([6, 14])
@@ -80,9 +83,7 @@ impl App {
                         .push(Space::new().height(8))
                         .push(text("Send to").size(12).color(MUTED))
                         .push(recipient_input)
-                        .push(
-                            row![send_btn, cancel_btn].spacing(8),
-                        );
+                        .push(row![send_btn, cancel_btn].spacing(8));
                 } else {
                     let mut send_btn = button(text("Send").size(12))
                         .padding([6, 14])
@@ -90,9 +91,7 @@ impl App {
                     if self.loading == 0 {
                         send_btn = send_btn.on_press(Message::SendNftSelected(id_str));
                     }
-                    card_content = card_content
-                        .push(Space::new().height(4))
-                        .push(send_btn);
+                    card_content = card_content.push(Space::new().height(4)).push(send_btn);
                 }
 
                 col = col.push(

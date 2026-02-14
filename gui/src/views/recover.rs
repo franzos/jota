@@ -9,8 +9,8 @@ impl App {
     pub(crate) fn view_recover(&self) -> Element<Message> {
         let title = text("Recover Wallet").size(24);
 
-        let name = text_input("Wallet name", &self.wallet_name)
-            .on_input(Message::WalletNameChanged);
+        let name =
+            text_input("Wallet name", &self.wallet_name).on_input(Message::WalletNameChanged);
         let mnemonic = text_input("24-word mnemonic phrase", &self.mnemonic_input)
             .on_input(|s| Message::MnemonicInputChanged(Zeroizing::new(s)))
             .secure(true);
@@ -23,9 +23,8 @@ impl App {
             .secure(true);
 
         let form_error = self.validate_create_form();
-        let can_submit = self.loading == 0
-            && form_error.is_none()
-            && !self.mnemonic_input.trim().is_empty();
+        let can_submit =
+            self.loading == 0 && form_error.is_none() && !self.mnemonic_input.trim().is_empty();
         let mut recover = button(text("Recover").size(14))
             .padding([10, 20])
             .style(styles::btn_primary);
@@ -37,16 +36,9 @@ impl App {
             .style(styles::btn_secondary)
             .on_press(Message::GoTo(Screen::WalletSelect));
 
-        let mut col = column![
-            title,
-            Space::new().height(8),
-            name,
-            mnemonic,
-            pw,
-            pw2,
-        ]
-        .spacing(5)
-        .max_width(400);
+        let mut col = column![title, Space::new().height(8), name, mnemonic, pw, pw2,]
+            .spacing(5)
+            .max_width(400);
 
         if let Some(hint) = &form_error {
             col = col.push(Space::new().height(4));

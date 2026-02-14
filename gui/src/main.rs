@@ -6,30 +6,34 @@ mod styles;
 mod update;
 mod views;
 
-use iced::widget::{button, column, container, pick_list, qr_code, row, scrollable, text, text_input, Space};
 use iced::theme::Palette;
+use iced::widget::{
+    button, column, container, pick_list, qr_code, row, scrollable, text, text_input, Space,
+};
 use iced::{Color, Element, Fill, Font, Length, Task, Theme};
 
 use std::path::PathBuf;
 use zeroize::Zeroizing;
 
 use iota_wallet_core::display::{format_balance, format_balance_with_symbol};
-use iota_wallet_core::{list_wallets, WalletEntry};
-use iota_wallet_core::network::{CoinMeta, NftSummary, StakedIotaSummary, TokenBalance, TransactionSummary};
+use iota_wallet_core::network::{
+    CoinMeta, NftSummary, StakedIotaSummary, TokenBalance, TransactionSummary,
+};
 use iota_wallet_core::wallet::{Network, NetworkConfig};
 use iota_wallet_core::SignedMessage;
+use iota_wallet_core::{list_wallets, WalletEntry};
 
 use chart::BalanceChart;
 use messages::Message;
 use state::{Screen, SignMode, WalletInfo};
 
 // IOTA Explorer dark-mode palette (iota2.darkmode)
-const BG:      Color = Color::from_rgb(0.051, 0.067, 0.090); // #0d1117
+const BG: Color = Color::from_rgb(0.051, 0.067, 0.090); // #0d1117
 const SIDEBAR: Color = Color::from_rgb(0.024, 0.039, 0.063); // #060a10
 const SURFACE: Color = Color::from_rgb(0.114, 0.157, 0.227); // #1d283a (iota2-gray-800)
-const BORDER:  Color = Color::from_rgb(0.204, 0.259, 0.337); // #344256 (iota2-gray-700)
-const ACTIVE:  Color = Color::from_rgb(0.086, 0.137, 0.251); // #162340
-const MUTED:   Color = Color::from_rgb(0.396, 0.459, 0.545); // #65758b (iota2-gray-500)
+const BORDER: Color = Color::from_rgb(0.204, 0.259, 0.337); // #344256 (iota2-gray-700)
+const ACTIVE: Color = Color::from_rgb(0.086, 0.137, 0.251); // #162340
+const MUTED: Color = Color::from_rgb(0.396, 0.459, 0.545); // #65758b (iota2-gray-500)
 const PRIMARY: Color = Color::from_rgb(0.145, 0.349, 0.961); // #2559f5 (iota2-blue-600)
 
 fn main() -> iced::Result {
@@ -169,7 +173,11 @@ impl TokenOption {
         let (symbol, balance_str) = match meta {
             Some(m) => {
                 let sym = if m.symbol.is_empty() {
-                    tb.coin_type.split("::").last().unwrap_or(&tb.coin_type).to_string()
+                    tb.coin_type
+                        .split("::")
+                        .last()
+                        .unwrap_or(&tb.coin_type)
+                        .to_string()
                 } else {
                     m.symbol.clone()
                 };
@@ -177,7 +185,12 @@ impl TokenOption {
                 (sym, display)
             }
             None => {
-                let sym = tb.coin_type.split("::").last().unwrap_or(&tb.coin_type).to_string();
+                let sym = tb
+                    .coin_type
+                    .split("::")
+                    .last()
+                    .unwrap_or(&tb.coin_type)
+                    .to_string();
                 (sym.clone(), format!("{} {}", tb.total_balance, sym))
             }
         };
@@ -263,14 +276,17 @@ impl App {
             error_message: None,
             success_message: None,
             status_message: None,
-            theme: Theme::custom("IOTA".to_string(), Palette {
-                background: BG,
-                text: Color::from_rgb(0.988, 0.988, 0.988),
-                primary: PRIMARY,
-                success: Color::from_rgb(0.059, 0.757, 0.718),
-                warning: Color::from_rgb(1.0, 0.757, 0.027),
-                danger: Color::from_rgb(0.906, 0.192, 0.192),
-            }),
+            theme: Theme::custom(
+                "IOTA".to_string(),
+                Palette {
+                    background: BG,
+                    text: Color::from_rgb(0.988, 0.988, 0.988),
+                    primary: PRIMARY,
+                    success: Color::from_rgb(0.059, 0.757, 0.718),
+                    warning: Color::from_rgb(1.0, 0.757, 0.027),
+                    danger: Color::from_rgb(0.906, 0.192, 0.192),
+                },
+            ),
         };
         (app, Task::none())
     }
@@ -306,27 +322,29 @@ impl App {
                     Screen::Recover => self.view_recover(),
                     _ => unreachable!(),
                 };
-                container(
-                    container(content).padding(32).style(styles::card),
-                )
-                .center_x(Fill)
-                .center_y(Fill)
-                .padding(20)
-                .into()
+                container(container(content).padding(32).style(styles::card))
+                    .center_x(Fill)
+                    .center_y(Fill)
+                    .padding(20)
+                    .into()
             }
             #[cfg(feature = "hardware-wallets")]
             Screen::HardwareConnect => {
                 let content = self.view_hardware_connect();
-                container(
-                    container(content).padding(32).style(styles::card),
-                )
-                .center_x(Fill)
-                .center_y(Fill)
-                .padding(20)
-                .into()
+                container(container(content).padding(32).style(styles::card))
+                    .center_x(Fill)
+                    .center_y(Fill)
+                    .padding(20)
+                    .into()
             }
-            Screen::Account | Screen::Send | Screen::Receive | Screen::History
-            | Screen::Staking | Screen::Nfts | Screen::Sign | Screen::Settings => self.view_main(),
+            Screen::Account
+            | Screen::Send
+            | Screen::Receive
+            | Screen::History
+            | Screen::Staking
+            | Screen::Nfts
+            | Screen::Sign
+            | Screen::Settings => self.view_main(),
         }
     }
 
@@ -448,10 +466,7 @@ impl App {
             info.address_string.clone()
         };
         let addr_row = row![
-            text(addr_short)
-                .size(12)
-                .font(Font::MONOSPACE)
-                .color(MUTED),
+            text(addr_short).size(12).font(Font::MONOSPACE).color(MUTED),
             button(text("Copy").size(11))
                 .padding([4, 10])
                 .style(styles::btn_secondary)
@@ -461,8 +476,9 @@ impl App {
         .align_y(iced::Alignment::Center);
 
         let network_label = format!("{}", info.network_config.network);
-        let network_badge =
-            container(text(network_label).size(11)).padding([3, 10]).style(styles::pill);
+        let network_badge = container(text(network_label).size(11))
+            .padding([3, 10])
+            .style(styles::pill);
 
         let left = column![name_label, balance_display].spacing(2);
         let right = column![network_badge, addr_row]
@@ -503,14 +519,19 @@ impl App {
             .map(|a| AccountOption(a.index))
             .collect();
         let selected = Some(AccountOption(account_idx));
-        let dropdown = pick_list(options, selected, |opt| {
-            Message::AccountIndexChanged(opt.0)
-        })
-        .text_size(11)
-        .width(Length::Fixed(72.0));
+        let dropdown = pick_list(options, selected, |opt| Message::AccountIndexChanged(opt.0))
+            .text_size(11)
+            .width(Length::Fixed(72.0));
 
         let toolbar = row![
-            label, divider, go_label, go_input, go_btn, divider2, select_label, dropdown,
+            label,
+            divider,
+            go_label,
+            go_input,
+            go_btn,
+            divider2,
+            select_label,
+            dropdown,
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center);

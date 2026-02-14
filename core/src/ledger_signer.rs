@@ -30,8 +30,7 @@ fn ledger_error_to_anyhow(e: LedgerError) -> anyhow::Error {
 impl LedgerSigner {
     /// Connect to a Ledger device and fetch the public key + address for the given derivation path.
     pub fn connect(path: Bip32Path) -> Result<Self> {
-        let ledger =
-            LedgerIota::new(&TransportType::NativeHID).map_err(ledger_error_to_anyhow)?;
+        let ledger = LedgerIota::new(&TransportType::NativeHID).map_err(ledger_error_to_anyhow)?;
 
         let (public_key, address) = ledger.get_pubkey(&path).map_err(ledger_error_to_anyhow)?;
 
@@ -55,7 +54,10 @@ impl LedgerSigner {
     /// an enriched error message with a recovery hint.
     fn enrich_error(&self, operation: &str, e: LedgerError) -> anyhow::Error {
         // User rejections and blind-signing errors are already clear
-        if matches!(e, LedgerError::UserRejected | LedgerError::BlindSigningDisabled) {
+        if matches!(
+            e,
+            LedgerError::UserRejected | LedgerError::BlindSigningDisabled
+        ) {
             return anyhow::anyhow!("{e}");
         }
         match self.ledger.check_status() {
@@ -83,10 +85,7 @@ impl LedgerSigner {
 }
 
 /// Connect to a Ledger device and verify the derived address matches a stored address.
-pub fn connect_and_verify(
-    path: Bip32Path,
-    stored_address: &Address,
-) -> Result<LedgerSigner> {
+pub fn connect_and_verify(path: Bip32Path, stored_address: &Address) -> Result<LedgerSigner> {
     let signer = LedgerSigner::connect(path)?;
     if signer.address() != stored_address {
         anyhow::bail!(
@@ -117,7 +116,9 @@ impl Signer for LedgerSigner {
             .cloned()
             .map(|o| ledger_iota_rebased::ObjectData::try_from(o))
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| anyhow::anyhow!("Cannot prepare object data for Ledger clear signing: {e}"))?;
+            .map_err(|e| {
+                anyhow::anyhow!("Cannot prepare object data for Ledger clear signing: {e}")
+            })?;
 
         let obj_ref = if ledger_objects.is_empty() {
             None
@@ -146,8 +147,7 @@ impl Signer for LedgerSigner {
         let pk: &[u8; 32] = self.public_key.as_ref();
 
         Ok(SignedMessage {
-            message: String::from_utf8(msg.to_vec())
-                .unwrap_or_else(|_| Base64::encode_string(msg)),
+            message: String::from_utf8(msg.to_vec()).unwrap_or_else(|_| Base64::encode_string(msg)),
             signature: Base64::encode_string(sig),
             public_key: Base64::encode_string(pk),
             address: self.address.to_string(),
