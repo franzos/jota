@@ -3,6 +3,7 @@ use crate::state::Screen;
 use crate::{styles, App, MUTED};
 use iced::widget::{button, column, row, text, text_input, Space};
 use iced::Element;
+use zeroize::Zeroizing;
 
 impl App {
     pub(crate) fn view_ledger_connect(&self) -> Element<Message> {
@@ -15,10 +16,10 @@ impl App {
         let name_input = text_input("Wallet name", &self.wallet_name)
             .on_input(Message::WalletNameChanged);
         let pw_input = text_input("Password", &*self.password)
-            .on_input(Message::PasswordChanged)
+            .on_input(|s| Message::PasswordChanged(Zeroizing::new(s)))
             .secure(true);
         let pw_confirm = text_input("Confirm password", &*self.password_confirm)
-            .on_input(Message::PasswordConfirmChanged)
+            .on_input(|s| Message::PasswordConfirmChanged(Zeroizing::new(s)))
             .secure(true);
 
         let form_error = self.validate_create_form();

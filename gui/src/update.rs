@@ -59,11 +59,11 @@ impl App {
 
             // Form inputs
             Message::PasswordChanged(v) => {
-                self.password = Zeroizing::new(v);
+                self.password = v;
                 Task::none()
             }
             Message::PasswordConfirmChanged(v) => {
-                self.password_confirm = Zeroizing::new(v);
+                self.password_confirm = v;
                 Task::none()
             }
             Message::WalletNameChanged(v) => {
@@ -71,7 +71,7 @@ impl App {
                 Task::none()
             }
             Message::MnemonicInputChanged(v) => {
-                self.mnemonic_input = Zeroizing::new(v);
+                self.mnemonic_input = v;
                 Task::none()
             }
             Message::RecipientChanged(v) => {
@@ -1126,15 +1126,15 @@ impl App {
             }
 
             Message::SettingsOldPasswordChanged(v) => {
-                self.settings_old_password = Zeroizing::new(v);
+                self.settings_old_password = v;
                 Task::none()
             }
             Message::SettingsNewPasswordChanged(v) => {
-                self.settings_new_password = Zeroizing::new(v);
+                self.settings_new_password = v;
                 Task::none()
             }
             Message::SettingsNewPasswordConfirmChanged(v) => {
-                self.settings_new_password_confirm = Zeroizing::new(v);
+                self.settings_new_password_confirm = v;
                 Task::none()
             }
 

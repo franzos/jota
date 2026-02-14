@@ -3,6 +3,7 @@ use crate::state::Screen;
 use crate::{styles, App, MUTED};
 use iced::widget::{button, column, row, text, text_input, Space};
 use iced::Element;
+use zeroize::Zeroizing;
 
 impl App {
     pub(crate) fn view_unlock(&self) -> Element<Message> {
@@ -10,7 +11,7 @@ impl App {
         let title = text(format!("Unlock: {name}")).size(24);
 
         let pw = text_input("Password", &self.password)
-            .on_input(Message::PasswordChanged)
+            .on_input(|s| Message::PasswordChanged(Zeroizing::new(s)))
             .on_submit(Message::UnlockWallet)
             .secure(true);
 

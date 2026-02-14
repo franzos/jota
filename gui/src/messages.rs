@@ -16,10 +16,10 @@ pub(crate) enum Message {
     WalletSelected(String),
 
     // Form inputs
-    PasswordChanged(String),
-    PasswordConfirmChanged(String),
+    PasswordChanged(Zeroizing<String>),
+    PasswordConfirmChanged(Zeroizing<String>),
     WalletNameChanged(String),
-    MnemonicInputChanged(String),
+    MnemonicInputChanged(Zeroizing<String>),
     RecipientChanged(String),
     AmountChanged(String),
 
@@ -114,9 +114,9 @@ pub(crate) enum Message {
 
     // Settings
     NetworkChanged(Network),
-    SettingsOldPasswordChanged(String),
-    SettingsNewPasswordChanged(String),
-    SettingsNewPasswordConfirmChanged(String),
+    SettingsOldPasswordChanged(Zeroizing<String>),
+    SettingsNewPasswordChanged(Zeroizing<String>),
+    SettingsNewPasswordConfirmChanged(Zeroizing<String>),
     ChangePassword,
     ChangePasswordCompleted(Result<(), String>),
 }
