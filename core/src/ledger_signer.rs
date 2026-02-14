@@ -1,5 +1,6 @@
 /// Ledger hardware wallet signer — implements `Signer` using a connected Ledger device.
 use anyhow::Result;
+use base64ct::{Base64, Encoding};
 use iota_sdk::types::{
     Address, Ed25519PublicKey, Object, SimpleSignature, Transaction, UserSignature,
 };
@@ -72,8 +73,22 @@ impl Signer for LedgerSigner {
         }))
     }
 
-    fn sign_message(&self, _msg: &[u8]) -> Result<SignedMessage> {
-        anyhow::bail!("Personal message signing is not supported on Ledger devices.")
+    fn sign_message(&self, msg: &[u8]) -> Result<SignedMessage> {
+        let signature = self
+            .ledger
+            .sign_message(msg, &self.path)
+            .map_err(|e| anyhow::anyhow!("Ledger message signing failed: {e}"))?;
+
+        let sig: &[u8; 64] = signature.as_ref();
+        let pk: &[u8; 32] = self.public_key.as_ref();
+
+        Ok(SignedMessage {
+            message: String::from_utf8(msg.to_vec())
+                .unwrap_or_else(|_| Base64::encode_string(msg)),
+            signature: Base64::encode_string(sig),
+            public_key: Base64::encode_string(pk),
+            address: self.address.to_string(),
+        })
     }
 
     fn address(&self) -> &Address {

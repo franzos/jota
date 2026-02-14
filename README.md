@@ -71,7 +71,7 @@ On first launch you'll be prompted to create a new wallet or recover from a seed
 | Transaction signing | Yes |
 | Address verification on device | Yes |
 | Multi-account | Yes |
-| Sign message | TODO |
+| Sign message | Yes |
 | Display seed phrase | N/A |
 
 ## Ledger

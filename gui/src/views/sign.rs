@@ -56,41 +56,42 @@ impl App {
     }
 
     fn view_sign_mode(&self) -> Element<Message> {
-        // Ledger wallets don't support personal message signing
         let is_ledger = self.wallet_info.as_ref().map(|i| i.is_ledger).unwrap_or(false);
-        if is_ledger {
-            return column![
-                text("Message").size(12).color(MUTED),
-                text("Personal message signing is not supported on Ledger devices.")
-                    .size(13)
-                    .color(styles::DANGER),
-                Space::new().height(8),
-                text("Transaction signing (send, stake, NFTs, notarize) works normally.")
-                    .size(12)
-                    .color(MUTED),
-            ]
-            .spacing(4)
-            .into();
-        }
 
         let input = text_input("Message to sign", &self.sign_message_input)
             .on_input(Message::SignMessageInputChanged)
             .on_submit(Message::ConfirmSign);
 
+        let msg_len = self.sign_message_input.len();
+        let too_long = is_ledger && msg_len > 2048;
+
         let mut sign_btn = button(text("Sign Message").size(14))
             .padding([10, 24])
             .style(styles::btn_primary);
-        if self.loading == 0 && !self.sign_message_input.is_empty() {
+        if self.loading == 0 && !self.sign_message_input.is_empty() && !too_long {
             sign_btn = sign_btn.on_press(Message::ConfirmSign);
         }
 
         let mut form = column![
             text("Message").size(12).color(MUTED),
             input,
-            Space::new().height(8),
-            sign_btn,
         ]
         .spacing(4);
+
+        if is_ledger {
+            let color = if too_long { styles::DANGER } else { MUTED };
+            form = form.push(
+                text(format!(
+                    "{msg_len} / 2048 bytes — Nano S/X: 2 KB, other Ledger devices: 4 KB"
+                ))
+                .size(11)
+                .color(color),
+            );
+        }
+
+        form = form
+            .push(Space::new().height(8))
+            .push(sign_btn);
 
         // Show result card
         if let Some(signed) = &self.signed_result {
