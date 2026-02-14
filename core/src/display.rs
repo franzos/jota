@@ -4,7 +4,7 @@
 use anyhow::{anyhow, bail, Result};
 
 use crate::network::{
-    NetworkStatus, NftSummary, StakeStatus, StakedIotaSummary, TokenBalance,
+    CoinMeta, NetworkStatus, NftSummary, StakeStatus, StakedIotaSummary, TokenBalance,
     TransactionDetailsSummary, TransactionDirection, TransactionSummary,
 };
 
@@ -200,7 +200,7 @@ pub fn format_token_balances(balances: &[TokenBalance]) -> String {
 #[must_use]
 pub fn format_token_balances_with_meta(
     balances: &[TokenBalance],
-    meta: &[crate::network::CoinMeta],
+    meta: &[CoinMeta],
 ) -> String {
     if balances.is_empty() {
         return "No token balances found.".to_string();

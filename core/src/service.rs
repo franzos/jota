@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
 use iota_sdk::types::{Address, Digest, ObjectId};
 
+use crate::error::{Result, WalletError};
 use crate::network::{
     CoinMeta, NetworkClient, NetworkStatus, NftSummary, StakedIotaSummary, TokenBalance,
     TransactionDetailsSummary, TransferResult,
@@ -50,61 +50,68 @@ impl WalletService {
     }
 
     pub async fn balance(&self) -> Result<u64> {
-        self.network.balance(self.signer.address()).await
+        Ok(self.network.balance(self.signer.address()).await?)
     }
 
     pub async fn send(&self, recipient: Address, amount: u64) -> Result<TransferResult> {
-        self.network
+        Ok(self
+            .network
             .send_iota(
                 self.signer.as_ref(),
                 self.signer.address(),
                 recipient,
                 amount,
             )
-            .await
+            .await?)
     }
 
     pub async fn sweep_all(&self, recipient: Address) -> Result<(TransferResult, u64)> {
-        self.network
+        Ok(self
+            .network
             .sweep_all(self.signer.as_ref(), self.signer.address(), recipient)
-            .await
+            .await?)
     }
 
     pub async fn stake(&self, validator: Address, amount: u64) -> Result<TransferResult> {
-        self.network
+        Ok(self
+            .network
             .stake_iota(
                 self.signer.as_ref(),
                 self.signer.address(),
                 validator,
                 amount,
             )
-            .await
+            .await?)
     }
 
     pub async fn unstake(&self, staked_object_id: ObjectId) -> Result<TransferResult> {
-        self.network
+        Ok(self
+            .network
             .unstake_iota(
                 self.signer.as_ref(),
                 self.signer.address(),
                 staked_object_id,
             )
-            .await
+            .await?)
     }
 
     pub async fn faucet(&self) -> Result<()> {
-        self.network.faucet(self.signer.address()).await
+        Ok(self.network.faucet(self.signer.address()).await?)
     }
 
     pub async fn get_stakes(&self) -> Result<Vec<StakedIotaSummary>> {
-        self.network.get_stakes(self.signer.address()).await
+        Ok(self.network.get_stakes(self.signer.address()).await?)
     }
 
     pub async fn get_token_balances(&self) -> Result<Vec<TokenBalance>> {
-        self.network.get_token_balances(self.signer.address()).await
+        Ok(self
+            .network
+            .get_token_balances(self.signer.address())
+            .await?)
     }
 
     pub async fn get_nfts(&self) -> Result<Vec<NftSummary>> {
-        self.network.get_nfts(self.signer.address()).await
+        Ok(self.network.get_nfts(self.signer.address()).await?)
     }
 
     pub async fn send_nft(
@@ -112,42 +119,46 @@ impl WalletService {
         object_id: ObjectId,
         recipient: Address,
     ) -> Result<TransferResult> {
-        self.network
+        Ok(self
+            .network
             .send_nft(
                 self.signer.as_ref(),
                 self.signer.address(),
                 object_id,
                 recipient,
             )
-            .await
+            .await?)
     }
 
     pub async fn sync_transactions(&self) -> Result<()> {
-        self.network.sync_transactions(self.signer.address()).await
+        Ok(self
+            .network
+            .sync_transactions(self.signer.address())
+            .await?)
     }
 
     pub async fn transaction_details(&self, digest: &Digest) -> Result<TransactionDetailsSummary> {
-        self.network.transaction_details(digest).await
+        Ok(self.network.transaction_details(digest).await?)
     }
 
     pub async fn status(&self) -> Result<NetworkStatus> {
-        self.network.status().await
+        Ok(self.network.status().await?)
     }
 
     pub async fn resolve_recipient(&self, recipient: &Recipient) -> Result<ResolvedRecipient> {
-        self.network.resolve_recipient(recipient).await
+        Ok(self.network.resolve_recipient(recipient).await?)
     }
 
     pub fn sign_message(&self, msg: &[u8]) -> Result<SignedMessage> {
-        self.signer.sign_message(msg)
+        Ok(self.signer.sign_message(msg)?)
     }
 
     pub fn verify_address(&self) -> Result<()> {
-        self.signer.verify_address()
+        Ok(self.signer.verify_address()?)
     }
 
     pub fn reconnect_signer(&self) -> Result<()> {
-        self.signer.reconnect()
+        Ok(self.signer.reconnect()?)
     }
 
     pub fn notarization_package(&self) -> Option<ObjectId> {
@@ -172,11 +183,12 @@ impl WalletService {
         description: Option<&str>,
     ) -> Result<TransferResult> {
         let pkg = self.resolve_notarization_package().ok_or_else(|| {
-            anyhow::anyhow!(
-                "Notarization not configured. Set IOTA_NOTARIZATION_PKG_ID or use --notarization-package."
+            WalletError::InvalidState(
+                "Notarization not configured. Set IOTA_NOTARIZATION_PKG_ID or use --notarization-package.".into(),
             )
         })?;
-        self.network
+        Ok(self
+            .network
             .notarize(
                 self.signer.as_ref(),
                 self.signer.address(),
@@ -184,22 +196,22 @@ impl WalletService {
                 message,
                 description,
             )
-            .await
+            .await?)
     }
 
     pub async fn default_iota_name(&self, address: &Address) -> Result<Option<String>> {
-        self.network.default_iota_name(address).await
+        Ok(self.network.default_iota_name(address).await?)
     }
 
     /// Resolve a token alias (e.g. "usdt") or full coin type to `CoinMeta`.
     /// Matches against the wallet's token balances, then fetches on-chain metadata.
     pub async fn resolve_coin_type(&self, alias: &str) -> Result<CoinMeta> {
-        let lower = alias.to_lowercase();
+        let key = alias.to_lowercase();
 
         // Check cache first
         {
             let cache = self.coin_meta_cache.lock().await;
-            if let Some(meta) = cache.get(&lower) {
+            if let Some(meta) = cache.get(&key) {
                 return Ok(meta.clone());
             }
         }
@@ -215,37 +227,38 @@ impl WalletService {
                 .filter(|b| {
                     let parts: Vec<&str> = b.coin_type.split("::").collect();
                     if let Some(name) = parts.last() {
-                        name.to_lowercase() == lower
+                        name.to_lowercase() == key
                     } else {
                         false
                     }
                 })
                 .collect();
             match matches.len() {
-                0 => bail!(
-                    "No token matching '{alias}' found in wallet. Use 'tokens' to list available tokens."
-                ),
+                0 => {
+                    return Err(WalletError::InvalidAmount(format!(
+                        "No token matching '{alias}' found in wallet. Use 'tokens' to list available tokens."
+                    )))
+                }
                 1 => matches[0].coin_type.clone(),
                 _ => {
                     let types: Vec<&str> = matches.iter().map(|b| b.coin_type.as_str()).collect();
-                    bail!(
+                    return Err(WalletError::InvalidAmount(format!(
                         "Multiple tokens match '{alias}': {}\nSpecify the full coin type instead.",
                         types.join(", ")
-                    )
+                    )));
                 }
             }
         };
 
         let meta = self.network.coin_metadata(&coin_type).await?;
 
-        // Cache the result under both the alias and the full coin type
+        // Cache under the normalized key (1 clone for the return value)
         {
             let mut cache = self.coin_meta_cache.lock().await;
             if cache.len() >= COIN_META_CACHE_LIMIT {
                 cache.clear();
             }
-            cache.insert(lower, meta.clone());
-            cache.insert(meta.coin_type.to_lowercase(), meta.clone());
+            cache.insert(key, meta.clone());
         }
 
         Ok(meta)
@@ -258,7 +271,8 @@ impl WalletService {
         coin_type: &str,
         amount: u64,
     ) -> Result<TransferResult> {
-        self.network
+        Ok(self
+            .network
             .send_token(
                 self.signer.as_ref(),
                 self.signer.address(),
@@ -266,7 +280,7 @@ impl WalletService {
                 coin_type,
                 amount,
             )
-            .await
+            .await?)
     }
 
     /// Sweep all of a specific token to a recipient.
@@ -280,10 +294,16 @@ impl WalletService {
         let token_balance = balances
             .iter()
             .find(|b| b.coin_type == coin_type)
-            .ok_or_else(|| anyhow::anyhow!("No balance found for token type '{coin_type}'"))?;
+            .ok_or_else(|| {
+                WalletError::InsufficientBalance(format!(
+                    "No balance found for token type '{coin_type}'"
+                ))
+            })?;
         let total = token_balance.total_balance;
         if total == 0 {
-            bail!("Nothing to sweep — token balance is 0.");
+            return Err(WalletError::InsufficientBalance(
+                "Nothing to sweep — token balance is 0.".into(),
+            ));
         }
 
         let result = self

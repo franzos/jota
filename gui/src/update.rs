@@ -375,7 +375,7 @@ impl App {
                             .await
                             .map_err(|e| anyhow::anyhow!("Task failed: {e}"))?
                     },
-                    |r: Result<(), anyhow::Error>| {
+                    |r: Result<(), _>| {
                         Message::HardwareVerifyAddressCompleted(r.map_err(|e| e.to_string()))
                     },
                 )
@@ -410,7 +410,7 @@ impl App {
                             .await
                             .map_err(|e| anyhow::anyhow!("Task failed: {e}"))?
                     },
-                    |r: Result<(), anyhow::Error>| {
+                    |r: Result<(), _>| {
                         Message::HardwareReconnected(r.map_err(|e| e.to_string()))
                     },
                 )
@@ -1008,7 +1008,7 @@ impl App {
 
                 Task::perform(
                     async move { service.sign_message(msg.as_bytes()) },
-                    |r: Result<SignedMessage, anyhow::Error>| {
+                    |r: Result<SignedMessage, _>| {
                         Message::SignCompleted(r.map_err(|e| e.to_string()))
                     },
                 )
@@ -1332,7 +1332,7 @@ impl App {
         Task::batch([
             Task::perform(
                 async move { svc1.balance().await },
-                |r: Result<u64, anyhow::Error>| {
+                |r: Result<u64, _>| {
                     Message::BalanceUpdated(r.map_err(|e| e.to_string()))
                 },
             ),
@@ -1404,7 +1404,7 @@ impl App {
 
         Task::perform(
             async move { service.get_nfts().await },
-            |r: Result<Vec<NftSummary>, anyhow::Error>| {
+            |r: Result<Vec<NftSummary>, _>| {
                 Message::NftsLoaded(r.map_err(|e| e.to_string()))
             },
         )
@@ -1419,7 +1419,7 @@ impl App {
 
         Task::perform(
             async move { service.get_stakes().await },
-            |r: Result<Vec<StakedIotaSummary>, anyhow::Error>| {
+            |r: Result<Vec<StakedIotaSummary>, _>| {
                 Message::StakesLoaded(r.map_err(|e| e.to_string()))
             },
         )

@@ -3,6 +3,7 @@ use anyhow::Context;
 pub mod cache;
 pub mod commands;
 pub mod display;
+pub mod error;
 #[cfg(feature = "ledger")]
 pub mod ledger_signer;
 #[cfg(feature = "ledger")]
@@ -27,6 +28,7 @@ pub mod wallet_file;
 
 pub use cache::TransactionCache;
 pub use commands::Command;
+pub use error::WalletError;
 pub use network::NetworkClient;
 pub use recipient::{Recipient, ResolvedRecipient};
 pub use service::WalletService;

@@ -1,5 +1,5 @@
 /// Wallet state — holds decrypted mnemonic, keypair, derived address, and network config.
-use anyhow::{Context, Result};
+use anyhow::Context;
 use iota_sdk::crypto::ed25519::Ed25519PrivateKey;
 use iota_sdk::crypto::FromMnemonic;
 use iota_sdk::types::Address;
@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use zeroize::{Zeroize, Zeroizing};
 
+use crate::error::{Result, WalletError};
 use crate::signer::SoftwareSigner;
 use crate::wallet_file;
 
@@ -105,14 +106,14 @@ impl std::fmt::Display for Network {
 }
 
 /// Generate a new 24-word BIP-39 mnemonic.
-fn generate_mnemonic() -> Result<String> {
+fn generate_mnemonic() -> anyhow::Result<String> {
     let mnemonic = bip39::Mnemonic::generate(24)
         .map_err(|e| anyhow::anyhow!("Failed to generate mnemonic: {e}"))?;
     Ok(mnemonic.to_string())
 }
 
 /// Derive an Ed25519 keypair and address from a mnemonic + account index.
-fn derive_key(mnemonic: &str, account_index: u64) -> Result<(Ed25519PrivateKey, Address)> {
+fn derive_key(mnemonic: &str, account_index: u64) -> anyhow::Result<(Ed25519PrivateKey, Address)> {
     let idx = if account_index == 0 {
         None
     } else {
@@ -136,7 +137,7 @@ fn ensure_account_in_list(accounts: &mut Vec<AccountRecord>, index: u64) {
 }
 
 /// Serialize, encrypt, and write wallet data to disk, then update the meta file.
-fn persist_wallet_to_file(path: &Path, data: &WalletData, password: &[u8]) -> Result<()> {
+fn persist_wallet_to_file(path: &Path, data: &WalletData, password: &[u8]) -> anyhow::Result<()> {
     let json = Zeroizing::new(serde_json::to_vec(data).context("Failed to serialize wallet data")?);
     wallet_file::save_to_file(path, &json, password).context("Failed to save wallet file")?;
     crate::write_wallet_meta(path, data.wallet_type)?;
@@ -186,10 +187,9 @@ impl Wallet {
 
     /// Open an existing wallet file.
     pub fn open(path: &Path, password: &[u8]) -> Result<Self> {
-        let json = wallet_file::load_from_file(path, password)
-            .context("Failed to open wallet file. Wrong password or corrupt file?")?;
+        let json = wallet_file::load_from_file(path, password)?;
         let mut data: WalletData = serde_json::from_slice(&json)
-            .context("Failed to parse wallet data. File may be corrupt.")?;
+            .map_err(|e| WalletError::InvalidState(format!("Failed to parse wallet data: {e}")))?;
 
         // Ensure active account is in the known list (handles old wallet files)
         ensure_account_in_list(&mut data.accounts, data.active_account_index);
@@ -199,8 +199,13 @@ impl Wallet {
                 let mnemonic = data
                     .mnemonic
                     .as_deref()
-                    .ok_or_else(|| anyhow::anyhow!("Software wallet is missing its mnemonic."))?;
-                let (private_key, address) = derive_key(mnemonic, data.active_account_index)?;
+                    .ok_or_else(|| {
+                        WalletError::InvalidState(
+                            "Software wallet is missing its mnemonic.".into(),
+                        )
+                    })?;
+                let (private_key, address) =
+                    derive_key(mnemonic, data.active_account_index)?;
                 Ok(Self {
                     data,
                     private_key: Some(private_key),
@@ -210,11 +215,13 @@ impl Wallet {
             }
             WalletType::Hardware(_) => {
                 let address = data.address.as_deref().ok_or_else(|| {
-                    anyhow::anyhow!("Hardware wallet is missing its stored address.")
+                    WalletError::InvalidState(
+                        "Hardware wallet is missing its stored address.".into(),
+                    )
                 })?;
-                let address = address
-                    .parse::<Address>()
-                    .map_err(|e| anyhow::anyhow!("Invalid stored address: {e}"))?;
+                let address = address.parse::<Address>().map_err(|e| {
+                    WalletError::InvalidState(format!("Invalid stored address: {e}"))
+                })?;
                 Ok(Self {
                     data,
                     private_key: None,
@@ -289,20 +296,14 @@ impl Wallet {
     /// Change the encryption password for a wallet file.
     /// Verifies the current password before re-encrypting.
     pub fn change_password(path: &Path, old_password: &[u8], new_password: &[u8]) -> Result<()> {
-        let plaintext = wallet_file::load_from_file(path, old_password).map_err(|e| match e {
-            wallet_file::WalletFileError::DecryptionFailed => {
-                anyhow::anyhow!("Current password is incorrect")
-            }
-            other => anyhow::anyhow!("{other}"),
-        })?;
-        wallet_file::save_to_file(path, &plaintext, new_password)
-            .context("Failed to save wallet with new password")?;
+        let plaintext = wallet_file::load_from_file(path, old_password)?;
+        wallet_file::save_to_file(path, &plaintext, new_password)?;
         Ok(())
     }
 
     /// Re-encrypt and save the wallet to disk (e.g. after changing network config).
     pub fn save(&self, password: &[u8]) -> Result<()> {
-        persist_wallet_to_file(&self.path, &self.data, password)
+        Ok(persist_wallet_to_file(&self.path, &self.data, password)?)
     }
 
     /// Switch to a different account index. Re-derives the keypair and address.
@@ -315,7 +316,9 @@ impl Wallet {
             WalletType::Software => {
                 let mnemonic =
                     self.data.mnemonic.as_deref().ok_or_else(|| {
-                        anyhow::anyhow!("Software wallet is missing its mnemonic.")
+                        WalletError::InvalidState(
+                            "Software wallet is missing its mnemonic.".into(),
+                        )
                     })?;
                 let (private_key, address) = derive_key(mnemonic, index)?;
                 self.private_key = Some(private_key);
@@ -345,7 +348,11 @@ impl Wallet {
             .data
             .mnemonic
             .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("Cannot derive addresses for a hardware wallet."))?;
+            .ok_or_else(|| {
+                WalletError::InvalidState(
+                    "Cannot derive addresses for a hardware wallet.".into(),
+                )
+            })?;
         let (_, address) = derive_key(mnemonic, index)?;
         Ok(address)
     }
@@ -373,7 +380,9 @@ impl Wallet {
     /// Build a software signer. Returns an error if called on a hardware wallet.
     pub fn signer(&self) -> Result<SoftwareSigner> {
         let key = self.private_key.clone().ok_or_else(|| {
-            anyhow::anyhow!("Cannot build software signer for a hardware wallet.")
+            WalletError::InvalidState(
+                "Cannot build software signer for a hardware wallet.".into(),
+            )
         })?;
         Ok(SoftwareSigner::new(key))
     }
@@ -575,7 +584,10 @@ mod tests {
 
         let result = Wallet::change_password(&path, b"wrong", b"new");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("incorrect"));
+        assert!(matches!(
+            result.unwrap_err(),
+            WalletError::WalletFile(wallet_file::WalletFileError::DecryptionFailed)
+        ));
     }
 
     #[test]
