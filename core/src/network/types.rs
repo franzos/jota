@@ -1,5 +1,7 @@
-use iota_sdk::types::ObjectId;
+use iota_sdk::graphql_client::TransactionDataEffects;
+use iota_sdk::types::{ObjectId, Transaction};
 
+use super::transfer::extract_transfer_amount;
 use crate::wallet::Network;
 
 pub struct TransferResult {
@@ -133,4 +135,33 @@ pub struct TransactionSummary {
     pub epoch: u64,
     /// Lamport version — monotonically increasing, used for chronological sorting.
     pub lamport_version: u64,
+}
+
+/// Build a `TransactionSummary` from a GraphQL `TransactionDataEffects` response.
+pub fn transaction_summary_from_graphql(
+    item: &TransactionDataEffects,
+    direction: TransactionDirection,
+) -> TransactionSummary {
+    let digest = item.tx.transaction.digest().to_string();
+    let (sender, amount) = match &item.tx.transaction {
+        Transaction::V1(v1) => {
+            let sender = Some(v1.sender.to_string());
+            let amount = extract_transfer_amount(&v1.kind);
+            (sender, amount)
+        }
+    };
+    let net = item.effects.gas_summary().net_gas_usage();
+    let fee = u64::try_from(net).ok().filter(|&f| f > 0);
+    let epoch = item.effects.epoch();
+    let lamport_version = item.effects.as_v1().lamport_version;
+    TransactionSummary {
+        digest,
+        direction: Some(direction),
+        timestamp: None,
+        sender,
+        amount,
+        fee,
+        epoch,
+        lamport_version,
+    }
 }

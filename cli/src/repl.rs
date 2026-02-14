@@ -49,23 +49,14 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
         // For Ledger wallets, verify the device is connected and address matches
         #[cfg(feature = "ledger")]
         if w.is_ledger() {
-            use iota_wallet_core::ledger_signer::LedgerSigner;
-            use iota_wallet_core::Signer;
-            use iota_wallet_core::wallet::Network;
+            use iota_wallet_core::ledger_signer::connect_and_verify;
 
             let path = iota_wallet_core::bip32_path_for(
                 w.network_config().network,
                 w.account_index() as u32,
             );
             println!("Connecting to Ledger device...");
-            let signer = LedgerSigner::connect(path)?;
-            if signer.address() != w.address() {
-                anyhow::bail!(
-                    "Ledger address mismatch. Device: {} Stored: {}. Wrong device or account?",
-                    signer.address(),
-                    w.address()
-                );
-            }
+            connect_and_verify(path, w.address())?;
         }
 
         #[cfg(not(feature = "ledger"))]
@@ -115,15 +106,14 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
             }
             #[cfg(feature = "ledger")]
             WalletAction::ConnectLedger => {
-                use iota_wallet_core::ledger_signer::LedgerSigner;
+                use iota_wallet_core::ledger_signer::connect_with_verification;
                 use iota_wallet_core::Signer;
 
                 let path = iota_wallet_core::bip32_path_for(network_config.network, 0);
                 println!("Connecting to Ledger device...");
-                let signer = LedgerSigner::connect(path)?;
-                println!("Address: {}", signer.address());
                 println!("Verify the address on your Ledger device...");
-                signer.verify_address()?;
+                let signer = connect_with_verification(path)?;
+                println!("Address: {}", signer.address());
                 println!("Address confirmed.");
 
                 let address = *signer.address();
@@ -219,13 +209,13 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                                 // For Ledger wallets, reconnect the device with the new path
                                 #[cfg(feature = "ledger")]
                                 if wallet.is_ledger() {
-                                    use iota_wallet_core::ledger_signer::LedgerSigner;
+                                    use iota_wallet_core::ledger_signer::connect_with_verification;
                                     use iota_wallet_core::Signer;
                                     let path = iota_wallet_core::bip32_path_for(
                                         wallet.network_config().network,
                                         idx as u32,
                                     );
-                                    match LedgerSigner::connect(path) {
+                                    match connect_with_verification(path) {
                                         Ok(new_signer) => {
                                             wallet.set_address(*new_signer.address());
                                             if let Err(e) = wallet.save(&session_password) {
@@ -447,12 +437,12 @@ fn prompt_mnemonic() -> Result<Zeroizing<String>> {
 fn build_repl_signer(wallet: &Wallet, _cli: &Cli) -> Result<Arc<dyn iota_wallet_core::Signer>> {
     #[cfg(feature = "ledger")]
     if wallet.is_ledger() {
-        use iota_wallet_core::ledger_signer::LedgerSigner;
+        use iota_wallet_core::ledger_signer::connect_and_verify;
         let path = iota_wallet_core::bip32_path_for(
             wallet.network_config().network,
             wallet.account_index() as u32,
         );
-        let signer = LedgerSigner::connect(path)?;
+        let signer = connect_and_verify(path, wallet.address())?;
         return Ok(Arc::new(signer));
     }
 

@@ -241,8 +241,7 @@ async fn run_oneshot(cli: &Cli, cmd_str: &str) -> Result<()> {
 fn build_signer(wallet: &Wallet, _cli: &Cli) -> Result<Arc<dyn iota_wallet_core::Signer>> {
     #[cfg(feature = "ledger")]
     if wallet.is_ledger() {
-        use iota_wallet_core::ledger_signer::LedgerSigner;
-        use iota_wallet_core::Signer;
+        use iota_wallet_core::ledger_signer::connect_and_verify;
 
         let path = iota_wallet_core::bip32_path_for(
             wallet.network_config().network,
@@ -250,16 +249,7 @@ fn build_signer(wallet: &Wallet, _cli: &Cli) -> Result<Arc<dyn iota_wallet_core:
         );
 
         println!("Connecting to Ledger device...");
-        let ledger_signer = LedgerSigner::connect(path)?;
-
-        // Verify the device address matches the stored one
-        if ledger_signer.address() != wallet.address() {
-            bail!(
-                "Ledger address mismatch. Device: {} Stored: {}. Wrong device or account?",
-                ledger_signer.address(),
-                wallet.address()
-            );
-        }
+        let ledger_signer = connect_and_verify(path, wallet.address())?;
         return Ok(Arc::new(ledger_signer));
     }
 

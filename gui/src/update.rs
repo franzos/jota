@@ -116,8 +116,7 @@ impl App {
 
                         #[cfg(feature = "ledger")]
                         if wallet.is_ledger() {
-                            use iota_wallet_core::ledger_signer::LedgerSigner;
-                            use iota_wallet_core::Signer;
+                            use iota_wallet_core::ledger_signer::connect_and_verify;
 
                             let bip32_path = iota_wallet_core::bip32_path_for(
                                 wallet.network_config().network,
@@ -126,18 +125,11 @@ impl App {
 
                             let stored_addr = *wallet.address();
                             let signer = tokio::task::spawn_blocking(move || {
-                                LedgerSigner::connect(bip32_path)
+                                connect_and_verify(bip32_path, &stored_addr)
                             })
                             .await
                             .map_err(|e| anyhow::anyhow!("Task failed: {e}"))??;
 
-                            if *signer.address() != stored_addr {
-                                anyhow::bail!(
-                                    "Ledger address mismatch. Device: {} Stored: {}",
-                                    signer.address(),
-                                    stored_addr
-                                );
-                            }
                             return WalletInfo::from_wallet_with_signer(&wallet, Arc::new(signer));
                         }
 
@@ -312,15 +304,13 @@ impl App {
 
                 Task::perform(
                     async move {
-                        use iota_wallet_core::ledger_signer::LedgerSigner;
+                        use iota_wallet_core::ledger_signer::connect_with_verification;
                         use iota_wallet_core::Signer;
 
                         let bip32_path = iota_wallet_core::bip32_path_for(config.network, 0);
 
                         let signer = tokio::task::spawn_blocking(move || {
-                            let s = LedgerSigner::connect(bip32_path)?;
-                            s.verify_address()?;
-                            Ok::<_, anyhow::Error>(s)
+                            connect_with_verification(bip32_path)
                         })
                         .await
                         .map_err(|e| anyhow::anyhow!("Task failed: {e}"))??;
@@ -876,7 +866,7 @@ impl App {
 
                         #[cfg(feature = "ledger")]
                         if is_ledger {
-                            use iota_wallet_core::ledger_signer::LedgerSigner;
+                            use iota_wallet_core::ledger_signer::connect_with_verification;
                             use iota_wallet_core::Signer;
                             let bip32_path = iota_wallet_core::bip32_path_for(
                                 wallet.network_config().network,
@@ -884,9 +874,7 @@ impl App {
                             );
 
                             let signer = tokio::task::spawn_blocking(move || {
-                                let s = LedgerSigner::connect(bip32_path)?;
-                                s.verify_address()?;
-                                Ok::<_, anyhow::Error>(s)
+                                connect_with_verification(bip32_path)
                             })
                             .await
                             .map_err(|e| anyhow::anyhow!("Task failed: {e}"))??;

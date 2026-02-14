@@ -42,6 +42,29 @@ impl LedgerSigner {
     }
 }
 
+/// Connect to a Ledger device and verify the derived address matches a stored address.
+pub fn connect_and_verify(
+    path: Bip32Path,
+    stored_address: &Address,
+) -> Result<LedgerSigner> {
+    let signer = LedgerSigner::connect(path)?;
+    if signer.address() != stored_address {
+        anyhow::bail!(
+            "Ledger address mismatch. Device: {} Stored: {}. Wrong device or account?",
+            signer.address(),
+            stored_address
+        );
+    }
+    Ok(signer)
+}
+
+/// Connect to a Ledger device and ask the user to verify the address on the device screen.
+pub fn connect_with_verification(path: Bip32Path) -> Result<LedgerSigner> {
+    let signer = LedgerSigner::connect(path)?;
+    signer.verify_address()?;
+    Ok(signer)
+}
+
 impl Signer for LedgerSigner {
     fn sign_transaction(&self, tx: &Transaction, objects: &[Object]) -> Result<UserSignature> {
         // Prepend the intent prefix [0, 0, 0] (TransactionData intent).

@@ -58,17 +58,7 @@ impl NetworkClient {
             }
         });
 
-        let response = self
-            .client
-            .run_query_from_json(
-                query.as_object()
-                    .ok_or_else(|| anyhow::anyhow!("Expected JSON object for GraphQL query"))?
-                    .clone(),
-            )
-            .await
-            .context("Failed to query staked objects")?;
-
-        let data = response.data.context("No data in staked IOTA response")?;
+        let data = self.execute_query(query, "Failed to query staked objects").await?;
         let empty = vec![];
         let nodes = data
             .get("address")

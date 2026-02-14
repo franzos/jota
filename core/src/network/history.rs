@@ -9,6 +9,7 @@ use super::NetworkClient;
 use super::transfer::{extract_transfer_amount, extract_transfer_recipient};
 use super::types::{
     TransactionDetailsSummary, TransactionDirection, TransactionFilter, TransactionSummary,
+    transaction_summary_from_graphql,
 };
 use crate::cache::TransactionCache;
 
@@ -72,30 +73,7 @@ impl NetworkClient {
         let summaries = page
             .data()
             .iter()
-            .map(|item| {
-                let digest = item.tx.transaction.digest().to_string();
-                let (sender, amount) = match &item.tx.transaction {
-                    Transaction::V1(v1) => {
-                        let sender = Some(v1.sender.to_string());
-                        let amount = extract_transfer_amount(&v1.kind);
-                        (sender, amount)
-                    }
-                };
-                let net = item.effects.gas_summary().net_gas_usage();
-                let fee = if net > 0 { Some(net as u64) } else { None };
-                let epoch = item.effects.epoch();
-                let lamport_version = item.effects.as_v1().lamport_version;
-                TransactionSummary {
-                    digest,
-                    direction: Some(direction),
-                    timestamp: None,
-                    sender,
-                    amount,
-                    fee,
-                    epoch,
-                    lamport_version,
-                }
-            })
+            .map(|item| transaction_summary_from_graphql(item, direction))
             .collect();
 
         Ok(summaries)
@@ -218,26 +196,7 @@ impl NetworkClient {
                     continue;
                 }
 
-                let (sender, amount) = match &item.tx.transaction {
-                    Transaction::V1(v1) => {
-                        let sender = Some(v1.sender.to_string());
-                        let amount = extract_transfer_amount(&v1.kind);
-                        (sender, amount)
-                    }
-                };
-                let net = item.effects.gas_summary().net_gas_usage();
-                let fee = if net > 0 { Some(net as u64) } else { None };
-
-                all.push(TransactionSummary {
-                    digest,
-                    direction: Some(direction),
-                    timestamp: None,
-                    sender,
-                    amount,
-                    fee,
-                    epoch,
-                    lamport_version: item.effects.as_v1().lamport_version,
-                });
+                all.push(transaction_summary_from_graphql(item, direction));
             }
 
             let info = page.page_info();
@@ -276,7 +235,7 @@ impl NetworkClient {
         let status = format!("{:?}", effects.status());
         let gas = effects.gas_summary();
         let net = gas.net_gas_usage();
-        let fee = if net > 0 { Some(net as u64) } else { None };
+        let fee = u64::try_from(net).ok().filter(|&f| f > 0);
 
         // Try to extract the recipient from the TransferObjects command
         let recipient = match tx {

@@ -112,6 +112,22 @@ fn ensure_account_in_list(accounts: &mut Vec<AccountRecord>, index: u64) {
     }
 }
 
+/// Serialize, encrypt, and write wallet data to disk, then update the meta file.
+fn persist_wallet_to_file(
+    path: &Path,
+    data: &WalletData,
+    password: &[u8],
+) -> Result<()> {
+    let json = Zeroizing::new(
+        serde_json::to_vec(data)
+            .context("Failed to serialize wallet data")?,
+    );
+    wallet_file::save_to_file(path, &json, password)
+        .context("Failed to save wallet file")?;
+    crate::write_wallet_meta(path, data.wallet_type);
+    Ok(())
+}
+
 /// In-memory wallet with derived key material.
 pub struct Wallet {
     data: WalletData,
@@ -140,13 +156,7 @@ impl Wallet {
             address: None,
         };
 
-        let json = Zeroizing::new(
-            serde_json::to_vec(&data)
-                .context("Failed to serialize wallet data")?,
-        );
-        wallet_file::save_to_file(&path, &json, password)
-            .context("Failed to save wallet file")?;
-        crate::write_wallet_meta(&path, WalletType::Software);
+        persist_wallet_to_file(&path, &data, password)?;
 
         Ok(Self {
             data,
@@ -211,13 +221,7 @@ impl Wallet {
             address: None,
         };
 
-        let json = Zeroizing::new(
-            serde_json::to_vec(&data)
-                .context("Failed to serialize wallet data")?,
-        );
-        wallet_file::save_to_file(&path, &json, password)
-            .context("Failed to save wallet file")?;
-        crate::write_wallet_meta(&path, WalletType::Software);
+        persist_wallet_to_file(&path, &data, password)?;
 
         Ok(Self {
             data,
@@ -243,13 +247,7 @@ impl Wallet {
             address: Some(address.to_string()),
         };
 
-        let json = Zeroizing::new(
-            serde_json::to_vec(&data)
-                .context("Failed to serialize wallet data")?,
-        );
-        wallet_file::save_to_file(&path, &json, password)
-            .context("Failed to save wallet file")?;
-        crate::write_wallet_meta(&path, WalletType::Ledger);
+        persist_wallet_to_file(&path, &data, password)?;
 
         Ok(Self {
             data,
@@ -280,13 +278,7 @@ impl Wallet {
 
     /// Re-encrypt and save the wallet to disk (e.g. after changing network config).
     pub fn save(&self, password: &[u8]) -> Result<()> {
-        let json = Zeroizing::new(
-            serde_json::to_vec(&self.data)
-                .context("Failed to serialize wallet data")?,
-        );
-        wallet_file::save_to_file(&self.path, &json, password)
-            .context("Failed to save wallet file")?;
-        Ok(())
+        persist_wallet_to_file(&self.path, &self.data, password)
     }
 
     /// Switch to a different account index. Re-derives the keypair and address.

@@ -19,65 +19,37 @@ impl NetworkClient {
         for _ in 0..MAX_PAGES {
             // address.objects returns MoveObjectConnection — nodes are MoveObject
             // directly, so display/contents are top-level fields (no asMoveObject).
-            let query = match &cursor {
-                Some(c) => serde_json::json!({
-                    "query": r#"query ($owner: IotaAddress!, $cursor: String) {
-                        address(address: $owner) {
-                            objects(first: 50, after: $cursor) {
-                                pageInfo { hasNextPage endCursor }
-                                nodes {
-                                    address
-                                    contents {
-                                        type { repr }
-                                    }
-                                    display {
-                                        key
-                                        value
-                                    }
+            // GraphQL treats null optional args as absent, so one query handles both cases.
+            let cursor_value = cursor
+                .as_deref()
+                .map(serde_json::Value::from)
+                .unwrap_or(serde_json::Value::Null);
+
+            let query = serde_json::json!({
+                "query": r#"query ($owner: IotaAddress!, $cursor: String) {
+                    address(address: $owner) {
+                        objects(first: 50, after: $cursor) {
+                            pageInfo { hasNextPage endCursor }
+                            nodes {
+                                address
+                                contents {
+                                    type { repr }
+                                }
+                                display {
+                                    key
+                                    value
                                 }
                             }
                         }
-                    }"#,
-                    "variables": {
-                        "owner": address.to_string(),
-                        "cursor": c,
                     }
-                }),
-                None => serde_json::json!({
-                    "query": r#"query ($owner: IotaAddress!) {
-                        address(address: $owner) {
-                            objects(first: 50) {
-                                pageInfo { hasNextPage endCursor }
-                                nodes {
-                                    address
-                                    contents {
-                                        type { repr }
-                                    }
-                                    display {
-                                        key
-                                        value
-                                    }
-                                }
-                            }
-                        }
-                    }"#,
-                    "variables": {
-                        "owner": address.to_string()
-                    }
-                }),
-            };
+                }"#,
+                "variables": {
+                    "owner": address.to_string(),
+                    "cursor": cursor_value,
+                }
+            });
 
-            let response = self
-                .client
-                .run_query_from_json(
-                    query.as_object()
-                        .ok_or_else(|| anyhow::anyhow!("Expected JSON object for GraphQL query"))?
-                        .clone(),
-                )
-                .await
-                .context("Failed to query owned objects")?;
-
-            let data = response.data.context("No data in NFT query response")?;
+            let data = self.execute_query(query, "Failed to query owned objects").await?;
             let objects = data
                 .get("address")
                 .and_then(|a| a.get("objects"));

@@ -38,6 +38,25 @@ fn validate_node_url(url: &str, allow_insecure: bool) -> Result<()> {
 }
 
 impl NetworkClient {
+    /// Execute a GraphQL query from a JSON value, returning the `data` field.
+    async fn execute_query(
+        &self,
+        query: serde_json::Value,
+        error_context: &'static str,
+    ) -> Result<serde_json::Value> {
+        let response = self
+            .client
+            .run_query_from_json(
+                query
+                    .as_object()
+                    .ok_or_else(|| anyhow::anyhow!("Expected JSON object for GraphQL query"))?
+                    .clone(),
+            )
+            .await
+            .context(error_context)?;
+        response.data.context("No data in GraphQL response")
+    }
+
     pub fn new(config: &NetworkConfig, allow_insecure: bool) -> Result<Self> {
         let (client, node_url) = match &config.network {
             Network::Testnet => (Client::new_testnet(), "https://graphql.testnet.iota.cafe".to_string()),
@@ -126,17 +145,7 @@ impl NetworkClient {
             }
         });
 
-        let response = self
-            .client
-            .run_query_from_json(
-                query.as_object()
-                    .ok_or_else(|| anyhow::anyhow!("Expected JSON object for GraphQL query"))?
-                    .clone(),
-            )
-            .await
-            .context("Failed to query token balances")?;
-
-        let data = response.data.context("No data in balances response")?;
+        let data = self.execute_query(query, "Failed to query token balances").await?;
         let empty = vec![];
         let nodes = data
             .get("address")

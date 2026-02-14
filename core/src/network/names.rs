@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use iota_sdk::types::Address;
 
 use super::NetworkClient;
@@ -16,17 +16,7 @@ impl NetworkClient {
             "variables": { "name": name }
         });
 
-        let response = self
-            .client
-            .run_query_from_json(
-                query.as_object()
-                    .ok_or_else(|| anyhow::anyhow!("Expected JSON object for GraphQL query"))?
-                    .clone(),
-            )
-            .await
-            .context("Failed to resolve IOTA name")?;
-
-        let data = response.data.context("No data in name resolution response")?;
+        let data = self.execute_query(query, "Failed to resolve IOTA name").await?;
         let addr_str = data
             .get("resolveIotaNamesAddress")
             .and_then(|v| v.get("address"))
@@ -48,17 +38,7 @@ impl NetworkClient {
             "variables": { "addr": address.to_string() }
         });
 
-        let response = self
-            .client
-            .run_query_from_json(
-                query.as_object()
-                    .ok_or_else(|| anyhow::anyhow!("Expected JSON object for GraphQL query"))?
-                    .clone(),
-            )
-            .await
-            .context("Failed to query default IOTA name")?;
-
-        let data = response.data.context("No data in default name response")?;
+        let data = self.execute_query(query, "Failed to query default IOTA name").await?;
         let name = data
             .get("address")
             .and_then(|v| v.get("iotaNamesDefaultName"))

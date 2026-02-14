@@ -11,6 +11,8 @@ use crate::network::{
 use crate::recipient::{Recipient, ResolvedRecipient};
 use crate::signer::{Signer, SignedMessage};
 
+const COIN_META_CACHE_LIMIT: usize = 256;
+
 pub struct WalletService {
     network: NetworkClient,
     signer: Arc<dyn Signer>,
@@ -207,6 +209,9 @@ impl WalletService {
         // Cache the result under both the alias and the full coin type
         {
             let mut cache = self.coin_meta_cache.lock().await;
+            if cache.len() >= COIN_META_CACHE_LIMIT {
+                cache.clear();
+            }
             cache.insert(lower, meta.clone());
             cache.insert(meta.coin_type.to_lowercase(), meta.clone());
         }
