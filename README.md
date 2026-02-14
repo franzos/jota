@@ -44,6 +44,36 @@ iota-wallet --account 1 --cmd "address"
 
 On first launch you'll be prompted to create a new wallet or recover from a seed phrase. The wallet file is encrypted with your password (argon2id + AES-256-GCM).
 
+## Features
+
+| Feature | CLI | REPL | GUI |
+|---------|:---:|:----:|:---:|
+| Send & receive IOTA | Yes | Yes | Yes |
+| Send & receive tokens | Yes | Yes | Yes |
+| NFTs | Yes | Yes | Yes |
+| Staking | Yes | Yes | Yes |
+| Transaction history | Yes | Yes | Yes |
+| .iota name resolution | Yes | Yes | Yes |
+| Sign & verify messages | Yes | Yes | Yes |
+| On-chain notarization | Yes | Yes | Yes |
+| Multi-account | Yes | Yes | Yes |
+| QR code (receive) | - | - | Yes |
+| QR code scan (send) | - | - | TODO |
+| Balance chart | - | - | Yes |
+| JSON output (`--json`) | Yes | Yes | - |
+| Faucet (testnet/devnet) | Yes | Yes | Yes |
+
+### Hardware wallets
+
+| Feature | Ledger |
+|---------|:------:|
+| Connect & create wallet | Yes |
+| Transaction signing | Yes |
+| Address verification on device | Yes |
+| Multi-account | Yes |
+| Sign message | TODO |
+| Display seed phrase | N/A |
+
 ## Ledger
 
 Hardware wallet signing is supported via Ledger devices (Nano S, Nano S+, Nano X, Flex, Stax). The IOTA app must be installed and open on the device.
