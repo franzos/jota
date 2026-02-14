@@ -7,7 +7,7 @@ use iota_wallet_core::display::format_balance_with_symbol;
 use iota_wallet_core::wallet::Network;
 
 impl App {
-    pub(crate) fn view_account(&self) -> Element<Message> {
+    pub(crate) fn view_account(&self) -> Element<'_, Message> {
         let Some(info) = &self.wallet_info else {
             return text("No wallet loaded").into();
         };

@@ -6,7 +6,7 @@ use iota_wallet_core::display::format_balance;
 use iota_wallet_core::network::StakeStatus;
 
 impl App {
-    pub(crate) fn view_staking(&self) -> Element<Message> {
+    pub(crate) fn view_staking(&self) -> Element<'_, Message> {
         let title = text("Staking").size(24);
 
         let header = row![title, Space::new().width(Fill)].align_y(iced::Alignment::Center);

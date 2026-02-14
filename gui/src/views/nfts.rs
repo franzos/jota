@@ -4,7 +4,7 @@ use iced::widget::{button, column, container, row, text, text_input, Space};
 use iced::{Element, Fill};
 
 impl App {
-    pub(crate) fn view_nfts(&self) -> Element<Message> {
+    pub(crate) fn view_nfts(&self) -> Element<'_, Message> {
         let title = text("NFTs").size(24);
 
         let header = row![

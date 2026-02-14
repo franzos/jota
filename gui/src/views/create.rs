@@ -6,7 +6,7 @@ use iced::Element;
 use zeroize::Zeroizing;
 
 impl App {
-    pub(crate) fn view_create(&self) -> Element<Message> {
+    pub(crate) fn view_create(&self) -> Element<'_, Message> {
         // After creation — show mnemonic
         if let Some(mnemonic) = &self.created_mnemonic {
             return self.view_mnemonic_display(mnemonic);
@@ -61,7 +61,7 @@ impl App {
         col.into()
     }
 
-    fn view_mnemonic_display(&self, mnemonic: &str) -> Element<Message> {
+    fn view_mnemonic_display(&self, mnemonic: &str) -> Element<'_, Message> {
         let title = text("Write Down Your Mnemonic").size(24);
         let warning =
             text("Save these 24 words in a safe place. You will need them to recover your wallet.")

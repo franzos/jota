@@ -6,7 +6,7 @@ use iced::Element;
 use zeroize::Zeroizing;
 
 impl App {
-    pub(crate) fn view_recover(&self) -> Element<Message> {
+    pub(crate) fn view_recover(&self) -> Element<'_, Message> {
         let title = text("Recover Wallet").size(24);
 
         let name =

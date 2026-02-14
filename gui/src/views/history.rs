@@ -4,7 +4,7 @@ use iced::widget::{button, column, container, row, text, Space};
 use iced::{Element, Fill};
 
 impl App {
-    pub(crate) fn view_history(&self) -> Element<Message> {
+    pub(crate) fn view_history(&self) -> Element<'_, Message> {
         let title = text("Transaction History").size(24);
         let refresh = button(text("Refresh").size(13))
             .padding([8, 16])
@@ -29,7 +29,7 @@ impl App {
 
             // Pagination
             let page_num = self.history_page + 1;
-            let total_pages = (self.history_total + 24) / 25;
+            let total_pages = self.history_total.div_ceil(25);
 
             let mut nav = row![].spacing(8).align_y(iced::Alignment::Center);
 

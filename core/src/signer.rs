@@ -63,7 +63,7 @@ pub fn verify_message(msg: &[u8], signature_b64: &str, public_key_b64: &str) -> 
 
     let user_sig = UserSignature::Simple(SimpleSignature::Ed25519 {
         signature,
-        public_key: public_key.clone(),
+        public_key,
     });
     let personal_msg = PersonalMessage(msg.into());
 

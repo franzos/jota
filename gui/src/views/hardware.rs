@@ -6,7 +6,7 @@ use iced::Element;
 use zeroize::Zeroizing;
 
 impl App {
-    pub(crate) fn view_hardware_connect(&self) -> Element<Message> {
+    pub(crate) fn view_hardware_connect(&self) -> Element<'_, Message> {
         let title = text("Connect Hardware Wallet").size(20);
         let back = button(text("Back").size(12))
             .padding([6, 14])
@@ -15,10 +15,10 @@ impl App {
 
         let name_input =
             text_input("Wallet name", &self.wallet_name).on_input(Message::WalletNameChanged);
-        let pw_input = text_input("Password", &*self.password)
+        let pw_input = text_input("Password", &self.password)
             .on_input(|s| Message::PasswordChanged(Zeroizing::new(s)))
             .secure(true);
-        let pw_confirm = text_input("Confirm password", &*self.password_confirm)
+        let pw_confirm = text_input("Confirm password", &self.password_confirm)
             .on_input(|s| Message::PasswordConfirmChanged(Zeroizing::new(s)))
             .secure(true);
 

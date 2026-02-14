@@ -6,7 +6,7 @@ use iced::Element;
 use zeroize::Zeroizing;
 
 impl App {
-    pub(crate) fn view_unlock(&self) -> Element<Message> {
+    pub(crate) fn view_unlock(&self) -> Element<'_, Message> {
         let name = self.selected_wallet.as_deref().unwrap_or("unknown");
         let title = text(format!("Unlock: {name}")).size(24);
 

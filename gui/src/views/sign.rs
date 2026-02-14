@@ -5,7 +5,7 @@ use iced::widget::{button, column, container, row, text, text_input, Space};
 use iced::{Element, Fill, Font};
 
 impl App {
-    pub(crate) fn view_sign(&self) -> Element<Message> {
+    pub(crate) fn view_sign(&self) -> Element<'_, Message> {
         if self.wallet_info.is_none() {
             return text("No wallet loaded").into();
         }
@@ -55,7 +55,7 @@ impl App {
         col.into()
     }
 
-    fn view_sign_mode(&self) -> Element<Message> {
+    fn view_sign_mode(&self) -> Element<'_, Message> {
         let is_hardware = self
             .wallet_info
             .as_ref()
@@ -150,7 +150,7 @@ impl App {
         form.into()
     }
 
-    fn view_verify_mode(&self) -> Element<Message> {
+    fn view_verify_mode(&self) -> Element<'_, Message> {
         let msg_input = text_input("Message", &self.verify_message_input)
             .on_input(Message::VerifyMessageInputChanged);
         let sig_input = text_input("Signature (base64)", &self.verify_signature_input)
@@ -199,7 +199,7 @@ impl App {
         form.into()
     }
 
-    fn view_notarize_mode(&self) -> Element<Message> {
+    fn view_notarize_mode(&self) -> Element<'_, Message> {
         let has_package = self
             .wallet_info
             .as_ref()

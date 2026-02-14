@@ -327,7 +327,7 @@ impl App {
                                 config,
                                 iota_wallet_core::HardwareKind::Ledger,
                             )?;
-                            return WalletInfo::from_wallet_with_signer(&wallet, Arc::new(signer));
+                            WalletInfo::from_wallet_with_signer(&wallet, Arc::new(signer))
                         }
 
                         #[cfg(not(feature = "ledger"))]

@@ -312,7 +312,7 @@ impl App {
 
     // -- Views --
 
-    fn view(&self) -> Element<Message> {
+    fn view(&self) -> Element<'_, Message> {
         match self.screen {
             Screen::WalletSelect | Screen::Unlock | Screen::Create | Screen::Recover => {
                 let content = match self.screen {
@@ -348,7 +348,7 @@ impl App {
         }
     }
 
-    fn view_main(&self) -> Element<Message> {
+    fn view_main(&self) -> Element<'_, Message> {
         let sidebar = self.view_sidebar();
         let header = self.view_header();
         let content: Element<Message> = match self.screen {
@@ -373,7 +373,7 @@ impl App {
         row![sidebar, right].into()
     }
 
-    fn view_sidebar(&self) -> Element<Message> {
+    fn view_sidebar(&self) -> Element<'_, Message> {
         let nav_btn =
             |icon: &'static str, label: &'static str, target: Screen| -> Element<Message> {
                 let active = self.screen == target;
@@ -442,7 +442,7 @@ impl App {
             .into()
     }
 
-    fn view_header(&self) -> Element<Message> {
+    fn view_header(&self) -> Element<'_, Message> {
         let Some(info) = &self.wallet_info else {
             return Space::new().into();
         };

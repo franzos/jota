@@ -4,7 +4,7 @@ use iced::widget::{button, column, container, qr_code, row, text, Space};
 use iced::{Element, Fill, Font};
 
 impl App {
-    pub(crate) fn view_receive(&self) -> Element<Message> {
+    pub(crate) fn view_receive(&self) -> Element<'_, Message> {
         let Some(info) = &self.wallet_info else {
             return text("No wallet loaded").into();
         };

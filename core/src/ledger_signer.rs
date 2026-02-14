@@ -114,7 +114,7 @@ impl Signer for LedgerSigner {
         let ledger_objects: Vec<ledger_iota_rebased::ObjectData> = objects
             .iter()
             .cloned()
-            .map(|o| ledger_iota_rebased::ObjectData::try_from(o))
+            .map(ledger_iota_rebased::ObjectData::try_from)
             .collect::<std::result::Result<Vec<_>, _>>()
             .map_err(|e| {
                 anyhow::anyhow!("Cannot prepare object data for Ledger clear signing: {e}")
@@ -133,7 +133,7 @@ impl Signer for LedgerSigner {
 
         Ok(UserSignature::Simple(SimpleSignature::Ed25519 {
             signature,
-            public_key: self.public_key.clone(),
+            public_key: self.public_key,
         }))
     }
 

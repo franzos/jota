@@ -90,11 +90,11 @@ pub fn write_wallet_meta(wallet_path: &std::path::Path, wallet_type: WalletType)
 fn read_wallet_meta(path: &std::path::Path) -> WalletType {
     std::fs::read_to_string(path)
         .ok()
-        .and_then(|s| match s.trim() {
+        .map(|s| match s.trim() {
             "ledger" | "hardware:ledger" => {
-                Some(WalletType::Hardware(wallet::HardwareKind::Ledger))
+                WalletType::Hardware(wallet::HardwareKind::Ledger)
             }
-            _ => Some(WalletType::Software),
+            _ => WalletType::Software,
         })
         .unwrap_or(WalletType::Software)
 }

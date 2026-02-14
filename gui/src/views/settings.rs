@@ -6,7 +6,7 @@ use iota_wallet_core::wallet::Network;
 use zeroize::Zeroizing;
 
 impl App {
-    pub(crate) fn view_settings(&self) -> Element<Message> {
+    pub(crate) fn view_settings(&self) -> Element<'_, Message> {
         let title = text("Settings").size(24);
 
         let active_network = self

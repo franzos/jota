@@ -3,16 +3,16 @@ use crate::state::Screen;
 use crate::{styles, App, MUTED};
 use iced::widget::{button, column, row, svg, text, Space};
 use iced::{Element, Fill, Length};
-use iota_wallet_core::wallet::{HardwareKind, Network, WalletType};
+use iota_wallet_core::wallet::{Network, WalletType};
 
 impl App {
-    pub(crate) fn view_wallet_select(&self) -> Element<Message> {
+    pub(crate) fn view_wallet_select(&self) -> Element<'_, Message> {
         let logo = svg(svg::Handle::from_memory(include_bytes!(
             "../../assets/iota-logo.svg"
         )))
         .width(Length::Fixed(200.0));
 
-        let net_btn = |label: &'static str, network: Network| -> Element<Message> {
+        let net_btn = |label: &'static str, network: Network| -> Element<'_, Message> {
             let active = self.network_config.network == network;
             button(text(label).size(12))
                 .padding([6, 12])

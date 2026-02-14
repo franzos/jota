@@ -5,7 +5,7 @@ use iced::{Element, Fill, Length};
 use iota_wallet_core::display::format_balance;
 
 impl App {
-    pub(crate) fn view_send(&self) -> Element<Message> {
+    pub(crate) fn view_send(&self) -> Element<'_, Message> {
         if self.wallet_info.is_none() {
             return text("No wallet loaded").into();
         }
