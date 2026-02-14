@@ -52,6 +52,9 @@ pub fn help_text(command: Option<&str>) -> String {
         Some("password") | Some("passwd") => {
             "password\n  Change the wallet's encryption password.\n  Alias: passwd".to_string()
         }
+        Some("reconnect") => {
+            "reconnect\n  Reconnect the Ledger device after it was locked, unplugged, or the app was closed.".to_string()
+        }
         Some("notarize") => {
             "notarize <message>\n  Create a locked notarization on-chain.\n  Posts a timestamped record via the IOTA notarization Move module.\n  Requires --notarization-package or IOTA_NOTARIZATION_PKG_ID.".to_string()
         }
@@ -88,6 +91,7 @@ pub fn help_text(command: Option<&str>) -> String {
              \x20 seed             Show seed phrase\n\
              \x20 account          Show or switch account\n\
              \x20 password         Change wallet password\n\
+             \x20 reconnect        Reconnect the Ledger device\n\
              \x20 help [cmd]       Show help for a command\n\
              \x20 exit             Exit the wallet\n\
              \n\

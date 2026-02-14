@@ -48,6 +48,12 @@ pub(crate) enum Message {
     #[cfg(feature = "ledger")]
     LedgerVerifyAddressCompleted(Result<(), String>),
 
+    // Ledger reconnect
+    #[cfg(feature = "ledger")]
+    LedgerReconnect,
+    #[cfg(feature = "ledger")]
+    LedgerReconnected(Result<(), String>),
+
     // Dashboard
     RefreshBalance,
     BalanceUpdated(Result<u64, String>),

@@ -70,6 +70,8 @@ pub enum Command {
     Notarize { message: String },
     /// Change wallet password
     Password,
+    /// Reconnect the Ledger device
+    Reconnect,
     /// Print help
     Help { command: Option<String> },
     /// Exit the wallet

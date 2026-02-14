@@ -237,6 +237,8 @@ impl Command {
 
             "password" | "passwd" => Ok(Command::Password),
 
+            "reconnect" => Ok(Command::Reconnect),
+
             "help" | "?" => Ok(Command::Help {
                 command: arg1.map(|s| s.to_string()),
             }),

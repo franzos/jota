@@ -13,7 +13,7 @@ ledger = ["dep:ledger-iota-rebased"]
 
 [dependencies]
 iota-sdk = "3.0.0-alpha.1"
-ledger-iota-rebased = { package = "ledger-iota", version = "0.1.0", features = ["iota-sdk-types"], optional = true }
+ledger-iota-rebased = { package = "ledger-iota", version = "0.1.2", features = ["iota-sdk-types"], optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"

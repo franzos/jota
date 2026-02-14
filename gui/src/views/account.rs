@@ -48,7 +48,19 @@ impl App {
             col = col.push(text(msg.as_str()).size(13).color(styles::ACCENT));
         }
         if let Some(err) = &self.error_message {
-            col = col.push(text(err.as_str()).size(13).color(styles::DANGER));
+            let mut error_row = row![text(err.as_str()).size(13).color(styles::DANGER)]
+                .spacing(8)
+                .align_y(iced::Alignment::Center);
+            #[cfg(feature = "ledger")]
+            if info.is_ledger && self.loading == 0 {
+                error_row = error_row.push(
+                    button(text("Reconnect Ledger").size(12))
+                        .padding([4, 10])
+                        .style(styles::btn_secondary)
+                        .on_press(Message::LedgerReconnect),
+                );
+            }
+            col = col.push(error_row);
         }
 
         // Balance chart card

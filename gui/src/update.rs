@@ -378,6 +378,42 @@ impl App {
                 Task::none()
             }
 
+            // -- Ledger reconnect --
+            #[cfg(feature = "ledger")]
+            Message::LedgerReconnect => {
+                let Some(info) = &self.wallet_info else {
+                    return Task::none();
+                };
+                let service = info.service.clone();
+                self.loading += 1;
+                self.error_message = None;
+                self.status_message = None;
+
+                Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || service.reconnect_signer())
+                            .await
+                            .map_err(|e| anyhow::anyhow!("Task failed: {e}"))?
+                    },
+                    |r: Result<(), anyhow::Error>| {
+                        Message::LedgerReconnected(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+
+            #[cfg(feature = "ledger")]
+            Message::LedgerReconnected(result) => {
+                self.loading = self.loading.saturating_sub(1);
+                match result {
+                    Ok(()) => {
+                        self.error_message = None;
+                        self.status_message = Some("Ledger reconnected".into());
+                    }
+                    Err(e) => self.error_message = Some(e),
+                }
+                Task::none()
+            }
+
             // -- Dashboard --
             Message::RefreshBalance => self.refresh_dashboard(),
 

@@ -183,6 +183,7 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
         "faucet".into(),
         "seed".into(),
         "account".into(), "acc".into(),
+        "reconnect".into(),
         "password".into(), "passwd".into(),
         "help".into(),
         "exit".into(), "quit".into(), "q".into(),
@@ -268,6 +269,12 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                                     wallet.address()
                                 );
                             }
+                            Err(e) => eprintln!("Error: {e}"),
+                        }
+                    }
+                    Ok(Command::Reconnect) => {
+                        match service.reconnect_signer() {
+                            Ok(()) => println!("Ledger reconnected."),
                             Err(e) => eprintln!("Error: {e}"),
                         }
                     }

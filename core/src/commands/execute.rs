@@ -548,6 +548,9 @@ impl Command {
 
             Command::Help { command } => Ok(help_text(command.as_deref())),
 
+            // Handled directly in the REPL loop (needs mutable service access)
+            Command::Reconnect => Ok(String::new()),
+
             Command::Exit => Ok(String::new()),
         }
     }

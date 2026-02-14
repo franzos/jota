@@ -24,6 +24,12 @@ pub trait Signer: Send + Sync {
     fn verify_address(&self) -> Result<()> {
         anyhow::bail!("Address verification is only supported on hardware devices.")
     }
+
+    /// Reconnect to the signing device (e.g. after a Ledger was unplugged or locked).
+    /// Software signers are always connected, so the default is a no-op.
+    fn reconnect(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// Result of signing an arbitrary message.
