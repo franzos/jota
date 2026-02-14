@@ -18,7 +18,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
 thiserror = "2"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["sync"] }
 argon2 = "0.5"
 # NOTE: aes-gcm 0.10 triggers generic-array deprecation warnings via transitive deps.
 # No newer major version available yet that avoids this.
@@ -28,6 +28,7 @@ bip39 = { version = "2", features = ["rand"] }
 zeroize = { version = "1", features = ["derive"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 dirs = "5"
+futures = "0.3"
 base64ct = { version = "1", features = ["alloc"] }
 
 [dev-dependencies]

@@ -19,7 +19,7 @@ ledger = ["iota-wallet-core/ledger"]
 iota-wallet-core = { path = "../core" }
 clap = { version = "4", features = ["derive", "env"] }
 reedline = "0.38"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 anyhow = "1"
 serde_json = "1"
 rpassword = "7"
