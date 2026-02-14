@@ -285,15 +285,14 @@ impl Command {
             Command::Tokens => {
                 let balances = service.get_token_balances().await?;
 
-                // Fetch metadata for non-IOTA tokens (best-effort)
-                let mut meta = Vec::new();
-                for b in &balances {
-                    if b.coin_type != "0x2::iota::IOTA" {
-                        if let Ok(m) = service.resolve_coin_type(&b.coin_type).await {
-                            meta.push(m);
-                        }
-                    }
-                }
+                // Fetch metadata for non-IOTA tokens
+                let futs: Vec<_> = balances
+                    .iter()
+                    .filter(|b| b.coin_type != "0x2::iota::IOTA")
+                    .map(|b| service.resolve_coin_type(&b.coin_type))
+                    .collect();
+                let results = futures::future::join_all(futs).await;
+                let meta: Vec<_> = results.into_iter().filter_map(|r| r.ok()).collect();
 
                 if json_output {
                     let json_balances: Vec<serde_json::Value> = balances
