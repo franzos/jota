@@ -21,6 +21,6 @@ iced = { version = "0.14", features = ["tokio", "svg", "canvas", "qr_code"] }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 anyhow = "1"
 zeroize = { version = "1", features = ["derive"] }
-dirs = "5"
+dirs = "6"
 arboard = { version = "3", features = ["wayland-data-control"] }
 open = "5"

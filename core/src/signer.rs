@@ -136,8 +136,7 @@ mod tests {
     use super::*;
 
     fn test_signer() -> SoftwareSigner {
-        let mut rng = rand::thread_rng();
-        let private_key = Ed25519PrivateKey::generate(&mut rng);
+        let private_key = Ed25519PrivateKey::generate(rand_core::OsRng);
         SoftwareSigner::new(Arc::new(private_key))
     }
 

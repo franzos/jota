@@ -7,7 +7,7 @@ pub mod error;
 #[cfg(feature = "ledger")]
 pub mod ledger_signer;
 #[cfg(feature = "ledger")]
-pub use ledger_iota_rebased::Bip32Path;
+pub use ledger_iota::Bip32Path;
 #[cfg(feature = "ledger")]
 pub use ledger_signer::LedgerSigner;
 

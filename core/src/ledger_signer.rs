@@ -4,7 +4,7 @@ use base64ct::{Base64, Encoding};
 use iota_sdk::types::{
     Address, Ed25519PublicKey, Object, SimpleSignature, Transaction, UserSignature,
 };
-use ledger_iota_rebased::{Bip32Path, DeviceStatus, LedgerError, LedgerIota, TransportType};
+use ledger_iota::{Bip32Path, DeviceStatus, LedgerError, LedgerIota, TransportType};
 
 use crate::signer::{SignedMessage, Signer};
 
@@ -111,10 +111,10 @@ impl Signer for LedgerSigner {
         let mut bcs_bytes = vec![0x00, 0x00, 0x00];
         bcs_bytes.extend_from_slice(&tx.to_bcs());
 
-        let ledger_objects: Vec<ledger_iota_rebased::ObjectData> = objects
+        let ledger_objects: Vec<ledger_iota::ObjectData> = objects
             .iter()
             .cloned()
-            .map(ledger_iota_rebased::ObjectData::try_from)
+            .map(ledger_iota::ObjectData::try_from)
             .collect::<std::result::Result<Vec<_>, _>>()
             .map_err(|e| anyhow::anyhow!(e))
             .context("Cannot prepare object data for Ledger clear signing")?;
