@@ -1,5 +1,5 @@
 /// Ledger hardware wallet signer — implements `Signer` using a connected Ledger device.
-use anyhow::Result;
+use anyhow::{Context, Result};
 use base64ct::{Base64, Encoding};
 use iota_sdk::types::{
     Address, Ed25519PublicKey, Object, SimpleSignature, Transaction, UserSignature,
@@ -116,9 +116,7 @@ impl Signer for LedgerSigner {
             .cloned()
             .map(ledger_iota_rebased::ObjectData::try_from)
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| {
-                anyhow::anyhow!("Cannot prepare object data for Ledger clear signing: {e}")
-            })?;
+            .context("Cannot prepare object data for Ledger clear signing")?;
 
         let obj_ref = if ledger_objects.is_empty() {
             None

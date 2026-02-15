@@ -107,8 +107,7 @@ impl std::fmt::Display for Network {
 
 /// Generate a new 24-word BIP-39 mnemonic.
 fn generate_mnemonic() -> anyhow::Result<String> {
-    let mnemonic = bip39::Mnemonic::generate(24)
-        .map_err(|e| anyhow::anyhow!("Failed to generate mnemonic: {e}"))?;
+    let mnemonic = bip39::Mnemonic::generate(24).context("Failed to generate mnemonic")?;
     Ok(mnemonic.to_string())
 }
 
@@ -120,7 +119,7 @@ fn derive_key(mnemonic: &str, account_index: u64) -> anyhow::Result<(Ed25519Priv
         Some(account_index)
     };
     let private_key = Ed25519PrivateKey::from_mnemonic(mnemonic, idx, None)
-        .map_err(|e| anyhow::anyhow!("Failed to derive key from mnemonic: {e}"))?;
+        .context("Failed to derive key from mnemonic")?;
     let address = private_key.public_key().derive_address();
     Ok((private_key, address))
 }
@@ -196,16 +195,10 @@ impl Wallet {
 
         match data.wallet_type {
             WalletType::Software => {
-                let mnemonic = data
-                    .mnemonic
-                    .as_deref()
-                    .ok_or_else(|| {
-                        WalletError::InvalidState(
-                            "Software wallet is missing its mnemonic.".into(),
-                        )
-                    })?;
-                let (private_key, address) =
-                    derive_key(mnemonic, data.active_account_index)?;
+                let mnemonic = data.mnemonic.as_deref().ok_or_else(|| {
+                    WalletError::InvalidState("Software wallet is missing its mnemonic.".into())
+                })?;
+                let (private_key, address) = derive_key(mnemonic, data.active_account_index)?;
                 Ok(Self {
                     data,
                     private_key: Some(private_key),
@@ -314,12 +307,9 @@ impl Wallet {
     pub fn switch_account(&mut self, index: u64) -> Result<()> {
         match self.data.wallet_type {
             WalletType::Software => {
-                let mnemonic =
-                    self.data.mnemonic.as_deref().ok_or_else(|| {
-                        WalletError::InvalidState(
-                            "Software wallet is missing its mnemonic.".into(),
-                        )
-                    })?;
+                let mnemonic = self.data.mnemonic.as_deref().ok_or_else(|| {
+                    WalletError::InvalidState("Software wallet is missing its mnemonic.".into())
+                })?;
                 let (private_key, address) = derive_key(mnemonic, index)?;
                 self.private_key = Some(private_key);
                 self.address = address;
@@ -344,15 +334,9 @@ impl Wallet {
     /// Derive the address for an account index without switching to it.
     /// Only available for software wallets.
     pub fn derive_address_for(&self, index: u64) -> Result<Address> {
-        let mnemonic = self
-            .data
-            .mnemonic
-            .as_deref()
-            .ok_or_else(|| {
-                WalletError::InvalidState(
-                    "Cannot derive addresses for a hardware wallet.".into(),
-                )
-            })?;
+        let mnemonic = self.data.mnemonic.as_deref().ok_or_else(|| {
+            WalletError::InvalidState("Cannot derive addresses for a hardware wallet.".into())
+        })?;
         let (_, address) = derive_key(mnemonic, index)?;
         Ok(address)
     }
@@ -380,9 +364,7 @@ impl Wallet {
     /// Build a software signer. Returns an error if called on a hardware wallet.
     pub fn signer(&self) -> Result<SoftwareSigner> {
         let key = self.private_key.clone().ok_or_else(|| {
-            WalletError::InvalidState(
-                "Cannot build software signer for a hardware wallet.".into(),
-            )
+            WalletError::InvalidState("Cannot build software signer for a hardware wallet.".into())
         })?;
         Ok(SoftwareSigner::new(key))
     }

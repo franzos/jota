@@ -1,6 +1,6 @@
 use std::fmt;
 
-use anyhow::{anyhow, bail};
+use anyhow::{bail, Context};
 use iota_sdk::types::Address;
 
 /// A recipient that may be a raw address or an IOTA Name (e.g. `franz.iota`).
@@ -24,7 +24,7 @@ impl Recipient {
         if input.starts_with("0x") || input.starts_with("0X") {
             return Address::from_hex(input)
                 .map(Recipient::Address)
-                .map_err(|e| anyhow!("Invalid address '{input}': {e}"));
+                .with_context(|| format!("Invalid address '{input}'"));
         }
 
         // Check for .iota name (case-insensitive suffix)

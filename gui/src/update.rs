@@ -410,9 +410,7 @@ impl App {
                             .await
                             .map_err(|e| anyhow::anyhow!("Task failed: {e}"))?
                     },
-                    |r: Result<(), _>| {
-                        Message::HardwareReconnected(r.map_err(|e| e.to_string()))
-                    },
+                    |r: Result<(), _>| Message::HardwareReconnected(r.map_err(|e| e.to_string())),
                 )
             }
 
@@ -1330,12 +1328,9 @@ impl App {
         let address_str = info.address.to_string();
 
         Task::batch([
-            Task::perform(
-                async move { svc1.balance().await },
-                |r: Result<u64, _>| {
-                    Message::BalanceUpdated(r.map_err(|e| e.to_string()))
-                },
-            ),
+            Task::perform(async move { svc1.balance().await }, |r: Result<u64, _>| {
+                Message::BalanceUpdated(r.map_err(|e| e.to_string()))
+            }),
             Task::perform(
                 async move {
                     svc2.sync_transactions().await?;
@@ -1404,9 +1399,7 @@ impl App {
 
         Task::perform(
             async move { service.get_nfts().await },
-            |r: Result<Vec<NftSummary>, _>| {
-                Message::NftsLoaded(r.map_err(|e| e.to_string()))
-            },
+            |r: Result<Vec<NftSummary>, _>| Message::NftsLoaded(r.map_err(|e| e.to_string())),
         )
     }
 

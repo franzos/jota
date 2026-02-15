@@ -100,9 +100,8 @@ impl Command {
                     anyhow::anyhow!("Missing transaction digest. Usage: show_transfer <digest>")
                 })?;
 
-                let digest = Digest::from_base58(digest_str).map_err(|e| {
-                    anyhow::anyhow!("Invalid transaction digest '{digest_str}': {e}")
-                })?;
+                let digest = Digest::from_base58(digest_str)
+                    .with_context(|| format!("Invalid transaction digest '{digest_str}'"))?;
 
                 Ok(Command::ShowTransfer { digest })
             }
@@ -137,7 +136,7 @@ impl Command {
                 })?;
 
                 let staked_object_id = ObjectId::from_hex(id_str)
-                    .map_err(|e| anyhow::anyhow!("Invalid object ID '{id_str}': {e}"))?;
+                    .with_context(|| format!("Invalid object ID '{id_str}'"))?;
 
                 Ok(Command::Unstake { staked_object_id })
             }
@@ -161,7 +160,7 @@ impl Command {
                 })?;
 
                 let object_id = ObjectId::from_hex(id_str)
-                    .map_err(|e| anyhow::anyhow!("Invalid object ID '{id_str}': {e}"))?;
+                    .with_context(|| format!("Invalid object ID '{id_str}'"))?;
                 let recipient =
                     Recipient::parse(addr_str.split_whitespace().next().unwrap_or(addr_str))?;
 
@@ -183,7 +182,7 @@ impl Command {
                 let index = arg1
                     .map(|s| s.parse::<u64>())
                     .transpose()
-                    .map_err(|e| anyhow::anyhow!("Invalid account index: {e}"))?;
+                    .context("Invalid account index")?;
                 Ok(Command::Account { index })
             }
 

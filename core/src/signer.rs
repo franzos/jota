@@ -1,6 +1,6 @@
 /// Signing abstraction that decouples transaction signing from a concrete key type.
 ///
-use anyhow::Result;
+use anyhow::{Context, Result};
 use base64ct::{Base64, Encoding};
 use iota_sdk::crypto::ed25519::{Ed25519PrivateKey, Ed25519VerifyingKey};
 use iota_sdk::crypto::{IotaSigner, IotaVerifier};
@@ -44,10 +44,8 @@ pub struct SignedMessage {
 /// Verify a signed message given the raw message bytes, base64 signature, and base64 public key.
 /// Returns `Ok(true)` if valid, `Ok(false)` if the signature doesn't match.
 pub fn verify_message(msg: &[u8], signature_b64: &str, public_key_b64: &str) -> Result<bool> {
-    let sig_bytes = Base64::decode_vec(signature_b64)
-        .map_err(|e| anyhow::anyhow!("Invalid base64 signature: {e}"))?;
-    let pk_bytes = Base64::decode_vec(public_key_b64)
-        .map_err(|e| anyhow::anyhow!("Invalid base64 public key: {e}"))?;
+    let sig_bytes = Base64::decode_vec(signature_b64).context("Invalid base64 signature")?;
+    let pk_bytes = Base64::decode_vec(public_key_b64).context("Invalid base64 public key")?;
 
     let sig_array: [u8; 64] = sig_bytes
         .as_slice()
@@ -67,8 +65,7 @@ pub fn verify_message(msg: &[u8], signature_b64: &str, public_key_b64: &str) -> 
     });
     let personal_msg = PersonalMessage(msg.into());
 
-    let verifier = Ed25519VerifyingKey::new(&public_key)
-        .map_err(|e| anyhow::anyhow!("Invalid public key: {e}"))?;
+    let verifier = Ed25519VerifyingKey::new(&public_key).context("Invalid public key")?;
 
     match verifier.verify_personal_message(&personal_msg, &user_sig) {
         Ok(()) => Ok(true),
@@ -96,7 +93,7 @@ impl Signer for SoftwareSigner {
     fn sign_transaction(&self, tx: &Transaction, _objects: &[Object]) -> Result<UserSignature> {
         self.private_key
             .sign_transaction(tx)
-            .map_err(|e| anyhow::anyhow!("Failed to sign transaction: {e}"))
+            .context("Failed to sign transaction")
     }
 
     fn sign_message(&self, msg: &[u8]) -> Result<SignedMessage> {
@@ -104,7 +101,7 @@ impl Signer for SoftwareSigner {
         let user_sig = self
             .private_key
             .sign_personal_message(&personal_msg)
-            .map_err(|e| anyhow::anyhow!("Failed to sign message: {e}"))?;
+            .context("Failed to sign message")?;
 
         let (sig_bytes, pk_bytes) = match &user_sig {
             UserSignature::Simple(SimpleSignature::Ed25519 {

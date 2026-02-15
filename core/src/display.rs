@@ -198,10 +198,7 @@ pub fn format_token_balances(balances: &[TokenBalance]) -> String {
 
 /// Format token balances with optional metadata for proper symbol/decimal display.
 #[must_use]
-pub fn format_token_balances_with_meta(
-    balances: &[TokenBalance],
-    meta: &[CoinMeta],
-) -> String {
+pub fn format_token_balances_with_meta(balances: &[TokenBalance], meta: &[CoinMeta]) -> String {
     if balances.is_empty() {
         return "No token balances found.".to_string();
     }

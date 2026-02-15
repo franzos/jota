@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use iota_sdk::types::Address;
 
 use super::NetworkClient;
@@ -25,8 +25,7 @@ impl NetworkClient {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Could not resolve '{name}' — name not found"))?;
 
-        Address::from_hex(addr_str)
-            .map_err(|e| anyhow::anyhow!("Invalid address in name resolution: {e}"))
+        Address::from_hex(addr_str).context("Invalid address in name resolution")
     }
 
     /// Look up the default IOTA Name for an address (reverse resolution).

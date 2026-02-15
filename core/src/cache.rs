@@ -60,6 +60,27 @@ impl TransactionCache {
         Ok(cache)
     }
 
+    /// Open (or create) the cache at a specific path.
+    pub fn open_at(path: &std::path::Path) -> Result<Self> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).context("Failed to create cache directory")?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700))?;
+            }
+        }
+        let conn = Connection::open(path).context("Failed to open transaction cache database")?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+        }
+        let cache = Self { conn };
+        cache.init_schema()?;
+        Ok(cache)
+    }
+
     /// Open an in-memory cache (for testing).
     #[cfg(test)]
     pub fn open_in_memory() -> Result<Self> {
@@ -128,11 +149,47 @@ impl TransactionCache {
             .conn
             .unchecked_transaction()
             .context("Failed to begin transaction")?;
+        Self::insert_batch(&tx, network, address, txs)?;
+        tx.commit().context("Failed to commit transaction batch")?;
+        Ok(())
+    }
 
-        {
-            let mut stmt = tx
-                .prepare_cached(
-                    "INSERT INTO transactions (
+    /// Atomically write sent txs, recv txs, and sync epoch in a single transaction.
+    /// Prevents partial sync state if any write fails midway.
+    pub fn commit_sync(
+        &self,
+        network: &str,
+        address: &str,
+        sent: &[TransactionSummary],
+        recv: &[TransactionSummary],
+        epoch: u64,
+    ) -> Result<()> {
+        let tx = self
+            .conn
+            .unchecked_transaction()
+            .context("Failed to begin sync transaction")?;
+
+        if !sent.is_empty() {
+            Self::insert_batch(&tx, network, address, sent)?;
+        }
+        if !recv.is_empty() {
+            Self::insert_batch(&tx, network, address, recv)?;
+        }
+        Self::update_sync_epoch(&tx, network, address, epoch)?;
+
+        tx.commit().context("Failed to commit sync")?;
+        Ok(())
+    }
+
+    fn insert_batch(
+        conn: &Connection,
+        network: &str,
+        address: &str,
+        txs: &[TransactionSummary],
+    ) -> Result<()> {
+        let mut stmt = conn
+            .prepare_cached(
+                "INSERT INTO transactions (
                     network, address, digest, direction, sender, recipient,
                     amount, fee, epoch, lamport_version
                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
@@ -144,28 +201,47 @@ impl TransactionCache {
                     sender = COALESCE(excluded.sender, transactions.sender),
                     amount = COALESCE(excluded.amount, transactions.amount),
                     fee = COALESCE(excluded.fee, transactions.fee)",
-                )
-                .context("Failed to prepare insert statement")?;
+            )
+            .context("Failed to prepare insert statement")?;
 
-            for tx_summary in txs {
-                let dir = tx_summary.direction.as_ref().map(|d| d.to_string());
-                stmt.execute(params![
-                    network,
-                    address,
-                    tx_summary.digest,
-                    dir,
-                    tx_summary.sender,
-                    Option::<String>::None, // recipient — populated later if needed
-                    tx_summary.amount.map(|a| a.to_string()),
-                    tx_summary.fee.map(|f| f.to_string()),
-                    tx_summary.epoch as i64,
-                    tx_summary.lamport_version as i64,
-                ])
-                .context("Failed to insert transaction")?;
-            }
+        for tx_summary in txs {
+            let dir = tx_summary.direction.as_ref().map(|d| d.to_string());
+            stmt.execute(params![
+                network,
+                address,
+                tx_summary.digest,
+                dir,
+                tx_summary.sender,
+                Option::<String>::None, // recipient — populated later if needed
+                tx_summary.amount.map(|a| a.to_string()),
+                tx_summary.fee.map(|f| f.to_string()),
+                tx_summary.epoch as i64,
+                tx_summary.lamport_version as i64,
+            ])
+            .context("Failed to insert transaction")?;
         }
+        Ok(())
+    }
 
-        tx.commit().context("Failed to commit transaction batch")?;
+    fn update_sync_epoch(
+        conn: &Connection,
+        network: &str,
+        address: &str,
+        epoch: u64,
+    ) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
+        conn.execute(
+            "INSERT INTO sync_state (network, address, last_epoch, last_synced_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT (network, address) DO UPDATE SET
+                 last_epoch = excluded.last_epoch,
+                 last_synced_at = excluded.last_synced_at",
+            params![network, address, epoch as i64, now],
+        )
+        .context("Failed to update sync state")?;
         Ok(())
     }
 
@@ -306,22 +382,7 @@ impl TransactionCache {
 
     /// Update the sync state after a successful sync.
     pub fn set_sync_epoch(&self, network: &str, address: &str, epoch: u64) -> Result<()> {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as i64;
-
-        self.conn
-            .execute(
-                "INSERT INTO sync_state (network, address, last_epoch, last_synced_at)
-             VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT (network, address) DO UPDATE SET
-                 last_epoch = excluded.last_epoch,
-                 last_synced_at = excluded.last_synced_at",
-                params![network, address, epoch as i64, now],
-            )
-            .context("Failed to update sync state")?;
-        Ok(())
+        Self::update_sync_epoch(&self.conn, network, address, epoch)
     }
 }
 

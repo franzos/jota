@@ -137,15 +137,9 @@ impl NetworkClient {
             ),
         )?;
 
-        // Phase 3: write results to cache (sync, reopen)
+        // Phase 3: write results atomically (all-or-nothing)
         let cache = TransactionCache::open()?;
-        if !sent.is_empty() {
-            cache.insert(&network_str, &address_str, &sent)?;
-        }
-        if !recv.is_empty() {
-            cache.insert(&network_str, &address_str, &recv)?;
-        }
-        cache.set_sync_epoch(&network_str, &address_str, current_epoch)?;
+        cache.commit_sync(&network_str, &address_str, &sent, &recv, current_epoch)?;
 
         Ok(())
     }

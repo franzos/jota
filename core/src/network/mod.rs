@@ -224,7 +224,7 @@ impl NetworkClient {
 
         let struct_tag: StructTag = coin_type
             .parse()
-            .map_err(|e| anyhow::anyhow!("Invalid coin type '{coin_type}': {e}"))?;
+            .with_context(|| format!("Invalid coin type '{coin_type}'"))?;
 
         let page = self
             .client

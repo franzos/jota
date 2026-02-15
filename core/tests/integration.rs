@@ -1,7 +1,10 @@
-/// Integration tests that hit the real testnet/devnet.
-/// Run with: cargo test -- --ignored
+/// Integration tests.
+/// Offline tests run by default. Network tests require: cargo test -- --ignored
+use iota_wallet_core::cache::TransactionCache;
 use iota_wallet_core::commands::Command;
-use iota_wallet_core::network::{NetworkClient, TransactionFilter};
+use iota_wallet_core::network::{
+    NetworkClient, TransactionDirection, TransactionFilter, TransactionSummary,
+};
 use iota_wallet_core::wallet::{Network, NetworkConfig, Wallet};
 use std::time::Duration;
 
@@ -440,4 +443,226 @@ async fn devnet_send_zero_rejected() {
         err.contains("Cannot send 0"),
         "error should mention 0 IOTA, got: {err}"
     );
+}
+
+// --- Offline integration tests (no network needed) ---
+
+#[test]
+fn wallet_create_open_recover_roundtrip() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let path1 = dir.path().join("original.wallet");
+    let path2 = dir.path().join("recovered.wallet");
+    let password = b"test-password";
+    let config = testnet_config();
+
+    let wallet = Wallet::create_new(path1.clone(), password, config.clone())
+        .expect("failed to create wallet");
+    let mnemonic = wallet.mnemonic().unwrap().to_string();
+    let address = *wallet.address();
+
+    // Reopen from disk
+    let reopened = Wallet::open(&path1, password).expect("failed to open wallet");
+    assert_eq!(*reopened.address(), address);
+    assert_eq!(reopened.mnemonic().unwrap(), mnemonic);
+
+    // Recover from mnemonic
+    let recovered = Wallet::recover_from_mnemonic(path2, password, &mnemonic, config)
+        .expect("failed to recover wallet");
+    assert_eq!(*recovered.address(), address);
+}
+
+#[test]
+fn wallet_account_switching_persists() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let path = dir.path().join("accounts.wallet");
+    let password = b"test-password";
+    let config = testnet_config();
+
+    let mut wallet =
+        Wallet::create_new(path.clone(), password, config).expect("failed to create wallet");
+    let addr0 = *wallet.address();
+
+    // Switch to account 1
+    wallet.switch_account(1).expect("failed to switch account");
+    let addr1 = *wallet.address();
+    assert_ne!(
+        addr0, addr1,
+        "different accounts should have different addresses"
+    );
+
+    // Save and reopen
+    wallet.save(password).expect("failed to save wallet");
+    let reopened = Wallet::open(&path, password).expect("failed to reopen wallet");
+    assert_eq!(
+        *reopened.address(),
+        addr1,
+        "reopened wallet should be on account 1"
+    );
+    assert_eq!(reopened.account_index(), 1);
+}
+
+#[test]
+fn wallet_wrong_password_rejected() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let path = dir.path().join("locked.wallet");
+
+    Wallet::create_new(path.clone(), b"correct", testnet_config())
+        .expect("failed to create wallet");
+
+    let result = Wallet::open(&path, b"wrong");
+    assert!(result.is_err(), "wrong password should fail");
+}
+
+#[test]
+fn wallet_meta_roundtrip() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let wallet_path = dir.path().join("meta-test.wallet");
+
+    // Create the wallet file so list_wallets finds it
+    std::fs::write(&wallet_path, b"dummy").unwrap();
+
+    // Write meta
+    iota_wallet_core::write_wallet_meta(&wallet_path, iota_wallet_core::WalletType::Software)
+        .expect("failed to write meta");
+
+    let entries = iota_wallet_core::list_wallets(dir.path());
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].name, "meta-test");
+    assert!(matches!(
+        entries[0].wallet_type,
+        iota_wallet_core::WalletType::Software
+    ));
+}
+
+#[test]
+fn cache_commit_sync_atomic() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let db_path = dir.path().join("test-cache.db");
+    let cache = TransactionCache::open_at(&db_path).expect("failed to open cache");
+
+    let sent = vec![TransactionSummary {
+        digest: "0xsent1".to_string(),
+        direction: Some(TransactionDirection::Out),
+        timestamp: None,
+        sender: Some("0xsender".to_string()),
+        amount: Some(1_000_000_000),
+        fee: Some(500_000),
+        epoch: 10,
+        lamport_version: 100,
+    }];
+
+    let recv = vec![TransactionSummary {
+        digest: "0xrecv1".to_string(),
+        direction: Some(TransactionDirection::In),
+        timestamp: None,
+        sender: Some("0xother".to_string()),
+        amount: Some(2_000_000_000),
+        fee: None,
+        epoch: 10,
+        lamport_version: 101,
+    }];
+
+    // commit_sync should write everything atomically
+    cache
+        .commit_sync("testnet", "0xme", &sent, &recv, 42)
+        .expect("commit_sync failed");
+
+    // Verify all data landed
+    let digests = cache.known_digests("testnet", "0xme").unwrap();
+    assert!(digests.contains("0xsent1"));
+    assert!(digests.contains("0xrecv1"));
+    assert_eq!(cache.get_sync_epoch("testnet", "0xme").unwrap(), 42);
+}
+
+#[test]
+fn cache_commit_sync_empty_batches() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let db_path = dir.path().join("empty-sync.db");
+    let cache = TransactionCache::open_at(&db_path).expect("failed to open cache");
+
+    // Empty sent + recv should still update sync epoch
+    cache
+        .commit_sync("testnet", "0xme", &[], &[], 5)
+        .expect("empty commit_sync failed");
+
+    assert_eq!(cache.get_sync_epoch("testnet", "0xme").unwrap(), 5);
+    let digests = cache.known_digests("testnet", "0xme").unwrap();
+    assert!(digests.is_empty());
+}
+
+#[test]
+fn cache_isolation_across_networks() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let db_path = dir.path().join("isolation.db");
+    let cache = TransactionCache::open_at(&db_path).expect("failed to open cache");
+
+    let tx = vec![TransactionSummary {
+        digest: "0xaaa".to_string(),
+        direction: Some(TransactionDirection::Out),
+        timestamp: None,
+        sender: Some("0xsender".to_string()),
+        amount: Some(100),
+        fee: None,
+        epoch: 1,
+        lamport_version: 1,
+    }];
+
+    cache
+        .commit_sync("testnet", "0xaddr", &tx, &[], 10)
+        .unwrap();
+
+    // Same address on mainnet should see nothing
+    let mainnet_digests = cache.known_digests("mainnet", "0xaddr").unwrap();
+    assert!(mainnet_digests.is_empty());
+    assert_eq!(cache.get_sync_epoch("mainnet", "0xaddr").unwrap(), 0);
+
+    // Same network, different address should see nothing
+    let other_digests = cache.known_digests("testnet", "0xother").unwrap();
+    assert!(other_digests.is_empty());
+}
+
+#[test]
+fn cache_epoch_deltas_with_commit_sync() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let db_path = dir.path().join("deltas.db");
+    let cache = TransactionCache::open_at(&db_path).expect("failed to open cache");
+
+    let sent = vec![TransactionSummary {
+        digest: "0xout".to_string(),
+        direction: Some(TransactionDirection::Out),
+        timestamp: None,
+        sender: Some("0xme".to_string()),
+        amount: Some(1_000_000_000),
+        fee: Some(500_000),
+        epoch: 5,
+        lamport_version: 10,
+    }];
+
+    let recv = vec![TransactionSummary {
+        digest: "0xin".to_string(),
+        direction: Some(TransactionDirection::In),
+        timestamp: None,
+        sender: Some("0xother".to_string()),
+        amount: Some(3_000_000_000),
+        fee: None,
+        epoch: 5,
+        lamport_version: 11,
+    }];
+
+    cache
+        .commit_sync("testnet", "0xme", &sent, &recv, 5)
+        .unwrap();
+
+    let deltas = cache.query_epoch_deltas("testnet", "0xme").unwrap();
+    assert_eq!(deltas.len(), 1);
+    // net = 3_000_000_000 - (1_000_000_000 + 500_000) = 1_999_500_000
+    assert_eq!(deltas[0], (5, 1_999_500_000));
+}
+
+#[test]
+fn validate_wallet_name_rejects_traversal() {
+    assert!(iota_wallet_core::validate_wallet_name("my-wallet").is_ok());
+    assert!(iota_wallet_core::validate_wallet_name("../etc/passwd").is_err());
+    assert!(iota_wallet_core::validate_wallet_name("foo/bar").is_err());
+    assert!(iota_wallet_core::validate_wallet_name("").is_err());
 }

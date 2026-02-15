@@ -156,7 +156,7 @@ impl NetworkClient {
     ) -> Result<TransferResult> {
         let struct_tag: StructTag = coin_type
             .parse()
-            .map_err(|e| anyhow::anyhow!("Invalid coin type '{coin_type}': {e}"))?;
+            .with_context(|| format!("Invalid coin type '{coin_type}'"))?;
 
         // Collect all coin ObjectIds for this type
         let mut coin_ids: Vec<ObjectId> = Vec::new();
