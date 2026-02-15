@@ -78,12 +78,8 @@ impl WalletInfo {
             .and_then(|s| ObjectId::from_hex(&s).ok());
 
         let network_client = NetworkClient::new(wallet.network_config(), false)?;
-        let service = WalletService::new(
-            network_client,
-            signer,
-            wallet.network_config().network.to_string(),
-        )
-        .with_notarization_package(notarization_package);
+        let service = WalletService::new(network_client, signer)
+            .with_notarization_package(notarization_package);
 
         let resolved_package = service.notarization_package();
 

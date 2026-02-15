@@ -57,6 +57,15 @@ impl NetworkClient {
         response.data.context("No data in GraphQL response")
     }
 
+    pub fn network_name(&self) -> &'static str {
+        match self.network {
+            Network::Testnet => "testnet",
+            Network::Mainnet => "mainnet",
+            Network::Devnet => "devnet",
+            Network::Custom => "custom",
+        }
+    }
+
     pub fn new(config: &NetworkConfig, allow_insecure: bool) -> Result<Self> {
         let (client, node_url) = match &config.network {
             Network::Testnet => (

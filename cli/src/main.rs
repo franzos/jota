@@ -207,8 +207,7 @@ async fn run_oneshot(cli: &Cli, cmd_str: &str) -> Result<()> {
 
     let signer: Arc<dyn iota_wallet_core::Signer> = build_signer(&wallet, cli)?;
 
-    let service = WalletService::new(network, signer, effective_config.network.to_string())
-        .with_notarization_package(notarization_pkg);
+    let service = WalletService::new(network, signer).with_notarization_package(notarization_pkg);
 
     let command = Command::parse(cmd_str)?;
     if command == Command::Exit {

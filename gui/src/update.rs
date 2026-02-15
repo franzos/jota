@@ -1151,7 +1151,7 @@ impl App {
                     match NetworkClient::new(&config, false) {
                         Ok(client) => {
                             let signer = info.service.signer().clone();
-                            let service = WalletService::new(client, signer, network.to_string())
+                            let service = WalletService::new(client, signer)
                                 .with_notarization_package(info.notarization_package_config);
                             info.notarization_package = service.notarization_package();
                             info.service = Arc::new(service);

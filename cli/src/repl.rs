@@ -144,8 +144,8 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
 
     let signer: Arc<dyn iota_wallet_core::Signer> = build_repl_signer(&wallet, cli)?;
 
-    let mut service = WalletService::new(network, signer, effective_config.network.to_string())
-        .with_notarization_package(notarization_pkg);
+    let mut service =
+        WalletService::new(network, signer).with_notarization_package(notarization_pkg);
 
     println!("Wallet ready. Address: {}", wallet.address());
     println!("Type 'help' for a list of commands.");
@@ -236,12 +236,9 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                                                 &effective_config,
                                                 cli.insecure,
                                             )?;
-                                            service = WalletService::new(
-                                                network,
-                                                Arc::new(new_signer),
-                                                effective_config.network.to_string(),
-                                            )
-                                            .with_notarization_package(notarization_pkg);
+                                            service =
+                                                WalletService::new(network, Arc::new(new_signer))
+                                                    .with_notarization_package(notarization_pkg);
                                         }
                                         Err(e) => {
                                             eprintln!("Error connecting to hardware wallet: {e}");
@@ -265,12 +262,8 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                                     continue;
                                 }
                                 let network = NetworkClient::new(&effective_config, cli.insecure)?;
-                                service = WalletService::new(
-                                    network,
-                                    Arc::new(wallet.signer()?),
-                                    effective_config.network.to_string(),
-                                )
-                                .with_notarization_package(notarization_pkg);
+                                service = WalletService::new(network, Arc::new(wallet.signer()?))
+                                    .with_notarization_package(notarization_pkg);
                                 let prompt_str = format!("[wallet {}]", wallet.short_address());
                                 prompt = DefaultPrompt::new(
                                     DefaultPromptSegment::Basic(prompt_str),

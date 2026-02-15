@@ -16,17 +16,15 @@ const COIN_META_CACHE_LIMIT: usize = 256;
 pub struct WalletService {
     network: NetworkClient,
     signer: Arc<dyn Signer>,
-    network_name: String,
     notarization_package: Option<ObjectId>,
     coin_meta_cache: tokio::sync::Mutex<HashMap<String, CoinMeta>>,
 }
 
 impl WalletService {
-    pub fn new(network: NetworkClient, signer: Arc<dyn Signer>, network_name: String) -> Self {
+    pub fn new(network: NetworkClient, signer: Arc<dyn Signer>) -> Self {
         Self {
             network,
             signer,
-            network_name,
             notarization_package: None,
             coin_meta_cache: tokio::sync::Mutex::new(HashMap::new()),
         }
@@ -42,7 +40,7 @@ impl WalletService {
     }
 
     pub fn network_name(&self) -> &str {
-        &self.network_name
+        self.network.network_name()
     }
 
     pub fn signer(&self) -> &Arc<dyn Signer> {
@@ -170,7 +168,7 @@ impl WalletService {
         if self.notarization_package.is_some() {
             return self.notarization_package;
         }
-        if self.network_name == "testnet" {
+        if self.network.network_name() == "testnet" {
             ObjectId::from_hex(crate::network::TESTNET_NOTARIZATION_PACKAGE).ok()
         } else {
             None
@@ -264,13 +262,19 @@ impl WalletService {
         Ok(meta)
     }
 
-    /// Send a non-IOTA token to a recipient.
+    /// Send a non-IOTA token to a recipient. Amount must be > 0; use
+    /// `sweep_all_token` to transfer the entire balance.
     pub async fn send_token(
         &self,
         recipient: Address,
         coin_type: &str,
         amount: u64,
     ) -> Result<TransferResult> {
+        if amount == 0 {
+            return Err(WalletError::InvalidAmount(
+                "Cannot send 0 tokens. Use sweep to transfer the entire balance.".into(),
+            ));
+        }
         Ok(self
             .network
             .send_token(
