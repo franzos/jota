@@ -7,6 +7,9 @@ use iota_wallet_core::wallet::Network;
 use iota_wallet_core::SignedMessage;
 use zeroize::Zeroizing;
 
+/// (transactions, total_count, epoch_deltas)
+pub(crate) type TransactionPage = (Vec<TransactionSummary>, u32, Vec<(u64, i64)>);
+
 // -- Messages --
 
 #[derive(Clone)]
@@ -62,7 +65,7 @@ pub(crate) enum Message {
     RequestFaucet,
     FaucetCompleted(Result<(), String>),
     CopyAddress,
-    TransactionsLoaded(Result<(Vec<TransactionSummary>, u32, Vec<(u64, i64)>), String>),
+    TransactionsLoaded(Result<TransactionPage, String>),
 
     // Send
     RecipientResolved(Result<String, String>),

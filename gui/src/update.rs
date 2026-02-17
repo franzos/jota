@@ -7,7 +7,6 @@ use iota_wallet_core::cache::TransactionCache;
 use iota_wallet_core::display::{parse_iota_amount, parse_token_amount};
 use iota_wallet_core::network::{
     CoinMeta, NetworkClient, NftSummary, StakedIotaSummary, TokenBalance, TransactionFilter,
-    TransactionSummary,
 };
 use iota_wallet_core::service::WalletService;
 use iota_wallet_core::wallet::{Network, NetworkConfig, Wallet};
@@ -1151,7 +1150,7 @@ impl App {
 
             Message::HistoryLookbackChanged(epochs) => {
                 self.history_lookback = epochs;
-                return self.refresh_dashboard();
+                self.refresh_dashboard()
             }
 
             Message::NetworkChanged(network) => {
@@ -1365,7 +1364,7 @@ impl App {
                     let deltas = cache.query_epoch_deltas(&network_name, &address_str)?;
                     Ok((page.transactions, page.total, deltas))
                 },
-                |r: Result<(Vec<TransactionSummary>, u32, Vec<(u64, i64)>), anyhow::Error>| {
+                |r: Result<crate::messages::TransactionPage, anyhow::Error>| {
                     Message::TransactionsLoaded(r.map_err(|e| e.to_string()))
                 },
             ),
@@ -1409,7 +1408,7 @@ impl App {
                 )?;
                 Ok((page.transactions, page.total, Vec::new()))
             },
-            |r: Result<(Vec<TransactionSummary>, u32, Vec<(u64, i64)>), anyhow::Error>| {
+            |r: Result<crate::messages::TransactionPage, anyhow::Error>| {
                 Message::TransactionsLoaded(r.map_err(|e| e.to_string()))
             },
         )
