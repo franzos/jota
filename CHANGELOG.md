@@ -1,3 +1,12 @@
+## [0.1.10] - 2026-02-18
+
+### Added
+- Validator listing for staking
+
+### Changed
+- Switched to ICED tables for better formatting
+- Improved currency and number formatting
+
 ## [0.1.9] - 2026-02-17
 
 ### Added
