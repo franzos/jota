@@ -205,8 +205,7 @@ impl App {
                     let age = format!("{}", v.age_epochs);
                     let apy = format!("{:.2}%", v.apy as f64 / 100.0);
                     let commission = format!("{:.1}%", v.commission_rate as f64 / 100.0);
-                    let pool_iota = v.staking_pool_iota_balance / 1_000_000_000;
-                    let pool_balance = format!("{pool_iota} IOTA");
+                    let pool_balance = format_balance(v.staking_pool_iota_balance);
 
                     ValidatorRow {
                         index: i,
@@ -317,8 +316,7 @@ impl App {
         let age_display = format!("{} epochs", v.age_epochs);
         let apy_display = format!("{:.2}%", v.apy as f64 / 100.0);
         let commission_display = format!("{:.1}%", v.commission_rate as f64 / 100.0);
-        let pool_iota = v.staking_pool_iota_balance / 1_000_000_000;
-        let pool_display = format!("{pool_iota} IOTA");
+        let pool_display = format_balance(v.staking_pool_iota_balance);
 
         detail = detail.push(
             row![

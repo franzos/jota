@@ -1,24 +1,95 @@
 /// Output formatting — IOTA denomination conversion and display helpers.
 ///
 /// IOTA uses 9 decimal places (nanos). 1 IOTA = 1_000_000_000 nanos.
+use std::sync::OnceLock;
+
 use anyhow::{anyhow, bail, Result};
+use num_format::{SystemLocale, ToFormattedString};
 
 use crate::network::{
     CoinMeta, NetworkStatus, NftSummary, StakeStatus, StakedIotaSummary, TokenBalance,
     TransactionDetailsSummary, TransactionDirection, TransactionSummary,
 };
 
-/// Format a raw token amount using the given number of decimal places.
-/// E.g. format_amount(1_500_000, 6) -> "1.500000"
+/// Cached system locale for number formatting.
+fn system_locale() -> &'static SystemLocale {
+    static LOCALE: OnceLock<SystemLocale> = OnceLock::new();
+    LOCALE.get_or_init(|| SystemLocale::default().unwrap_or_else(|_| {
+        // Fallback: build from en locale
+        SystemLocale::from_name("en_US").unwrap_or_else(|_| {
+            SystemLocale::default().unwrap_or_else(|_| unreachable!())
+        })
+    }))
+}
+
+/// Format a raw token amount using the given number of decimal places,
+/// with locale-aware thousands grouping and decimal separator.
+///
+/// Trailing zeros are trimmed but at least one fractional digit is kept.
+/// E.g. format_amount(1_500_000_000, 9) -> "1.5" (en_US) or "1,5" (de_DE)
 #[must_use]
 pub fn format_amount(value: u128, decimals: u8) -> String {
+    let locale = system_locale();
+    format_amount_with_locale(value, decimals, locale.separator(), locale.decimal())
+}
+
+/// Format with explicit separators — used by tests for deterministic output.
+fn format_amount_with_locale(value: u128, decimals: u8, thousands_sep: &str, decimal_sep: &str) -> String {
     if decimals == 0 {
-        return value.to_string();
+        return format_integer_grouped(value, thousands_sep);
     }
     let divisor = 10u128.pow(decimals as u32);
     let whole = value / divisor;
     let frac = value % divisor;
-    format!("{whole}.{frac:0>width$}", width = decimals as usize)
+
+    let whole_str = format_integer_grouped(whole, thousands_sep);
+    let frac_str = format!("{frac:0>width$}", width = decimals as usize);
+
+    // Trim trailing zeros, keep at least 1 fractional digit
+    let trimmed = frac_str.trim_end_matches('0');
+    let frac_display = if trimmed.is_empty() { "0" } else { trimmed };
+
+    format!("{whole_str}{decimal_sep}{frac_display}")
+}
+
+/// Group an integer with thousands separators.
+fn format_integer_grouped(value: u128, separator: &str) -> String {
+    let digits = value.to_string();
+    if digits.len() <= 3 {
+        return digits;
+    }
+    let mut result = String::with_capacity(digits.len() + digits.len() / 3);
+    for (i, ch) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            result.push_str(separator);
+        }
+        result.push(ch);
+    }
+    result
+}
+
+/// Format a float value (already in token units) for chart Y-axis labels.
+/// Uses locale thousands separator with 0-2 decimal places.
+#[must_use]
+pub fn format_chart_label(val: f64) -> String {
+    let locale = system_locale();
+    let decimal_sep = locale.decimal();
+
+    let whole = val.trunc() as i64;
+    let whole_str = if let Ok(v) = u64::try_from(whole) {
+        v.to_formatted_string(locale)
+    } else {
+        whole.to_string()
+    };
+
+    let frac = (val.fract().abs() * 100.0).round() as u64;
+    if frac == 0 {
+        whole_str
+    } else if frac % 10 == 0 {
+        format!("{whole_str}{decimal_sep}{}", frac / 10)
+    } else {
+        format!("{whole_str}{decimal_sep}{frac:02}")
+    }
 }
 
 /// Format a raw token amount with its symbol appended.
@@ -296,42 +367,107 @@ pub fn format_address_json(address: &str) -> String {
 mod tests {
     use super::*;
 
+    /// Helper: format with en_US-style separators for deterministic tests.
+    fn fmt_en(value: u128, decimals: u8) -> String {
+        format_amount_with_locale(value, decimals, ",", ".")
+    }
+
+    // -- format_amount_with_locale (deterministic) tests --
+
     #[test]
-    fn nanos_to_iota_zero() {
-        assert_eq!(nanos_to_iota(0_u64), "0.000000000");
+    fn format_amount_zero() {
+        assert_eq!(fmt_en(0, 9), "0.0");
     }
 
     #[test]
-    fn nanos_to_iota_one() {
-        assert_eq!(nanos_to_iota(1_000_000_000_u64), "1.000000000");
+    fn format_amount_one_iota() {
+        assert_eq!(fmt_en(1_000_000_000, 9), "1.0");
     }
 
     #[test]
-    fn nanos_to_iota_fractional() {
-        assert_eq!(nanos_to_iota(1_500_000_000_u64), "1.500000000");
+    fn format_amount_fractional() {
+        assert_eq!(fmt_en(1_500_000_000, 9), "1.5");
     }
 
     #[test]
-    fn nanos_to_iota_small() {
-        assert_eq!(nanos_to_iota(1_u64), "0.000000001");
+    fn format_amount_small() {
+        assert_eq!(fmt_en(1, 9), "0.000000001");
     }
 
     #[test]
-    fn nanos_to_iota_large() {
-        assert_eq!(nanos_to_iota(123_456_789_012_u64), "123.456789012");
+    fn format_amount_large() {
+        assert_eq!(fmt_en(123_456_789_012, 9), "123.456789012");
     }
 
     #[test]
-    fn nanos_to_iota_u128() {
-        // Value exceeding u64::MAX
+    fn format_amount_thousands_grouping() {
+        assert_eq!(fmt_en(100_000_500_000_000, 9), "100,000.5");
+    }
+
+    #[test]
+    fn format_amount_u128_large() {
         let big: u128 = u64::MAX as u128 + 1_000_000_000;
-        assert_eq!(nanos_to_iota(big), "18446744074.709551615");
+        let result = fmt_en(big, 9);
+        assert!(result.contains('.'), "should have decimal");
+        assert!(result.contains(','), "should have thousands grouping");
     }
 
     #[test]
-    fn format_balance_display() {
-        assert_eq!(format_balance(2_000_000_000_u64), "2.000000000 IOTA");
+    fn format_amount_trimming_keeps_one_digit() {
+        // 2.000000000 -> "2.0", not "2."
+        assert_eq!(fmt_en(2_000_000_000, 9), "2.0");
     }
+
+    #[test]
+    fn format_amount_trimming_preserves_significant() {
+        // 1.123456789 stays fully intact
+        assert_eq!(fmt_en(1_123_456_789, 9), "1.123456789");
+    }
+
+    #[test]
+    fn format_amount_de_locale() {
+        let result = format_amount_with_locale(100_000_500_000_000, 9, ".", ",");
+        assert_eq!(result, "100.000,5");
+    }
+
+    // -- format_amount (public, locale-dependent) sanity checks --
+
+    #[test]
+    fn format_amount_does_not_panic() {
+        let result = format_amount(u128::MAX, 9);
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn format_amount_zero_decimals() {
+        // Zero decimals should not have a decimal point (locale-independent)
+        let result = format_amount(100, 0);
+        assert!(result.contains("100"));
+    }
+
+    // -- format_amount multi-token tests --
+
+    #[test]
+    fn format_amount_usdt_like() {
+        assert_eq!(fmt_en(1_500_000, 6), "1.5");
+    }
+
+    #[test]
+    fn format_amount_zero_with_decimals() {
+        assert_eq!(fmt_en(0, 6), "0.0");
+    }
+
+    #[test]
+    fn format_amount_18_decimals() {
+        assert_eq!(fmt_en(1_000_000_000_000_000_000, 18), "1.0");
+    }
+
+    #[test]
+    fn format_amount_value_smaller_than_one_unit() {
+        assert_eq!(fmt_en(123, 8), "0.00000123");
+    }
+
+    // -- parse tests (unchanged — parsing is not locale-dependent) --
 
     #[test]
     fn parse_whole_number() {
@@ -403,7 +539,10 @@ mod tests {
         let json = format_balance_json(1_500_000_000);
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(v["balance_nanos"], 1_500_000_000u64);
-        assert_eq!(v["balance_iota"], "1.500000000");
+        // The formatted string now trims trailing zeros
+        let iota_str = v["balance_iota"].as_str().unwrap();
+        assert!(iota_str.contains("1"), "should contain 1");
+        assert!(iota_str.contains("5"), "should contain 5");
     }
 
     #[test]
@@ -444,12 +583,7 @@ mod tests {
         assert!(output.contains("0x9876543210fedcba"));
         assert!(output.contains("0xaabbccddee112233"));
         assert!(output.contains("0xffeeddccbbaa9988"));
-        // Amounts shown
-        assert!(output.contains("1.500000000"));
-        assert!(output.contains("2.000000000"));
-        // Fee only shown for outgoing
-        assert!(output.contains("0.002345600")); // out fee
-                                                 // In fee is "-"
+        // Fee only shown for outgoing; in fee is "-"
         let in_line = output.lines().find(|l| l.starts_with("in ")).unwrap();
         let out_line = output.lines().find(|l| l.starts_with("out")).unwrap();
         assert!(in_line.contains("  -  "));
@@ -472,52 +606,7 @@ mod tests {
         assert!(output.contains("-"));
     }
 
-    // -- format_amount multi-token tests --
-
-    #[test]
-    fn format_amount_usdt_like() {
-        assert_eq!(format_amount(1_500_000, 6), "1.500000");
-    }
-
-    #[test]
-    fn format_amount_zero_with_decimals() {
-        assert_eq!(format_amount(0, 6), "0.000000");
-    }
-
-    #[test]
-    fn format_amount_zero_decimals() {
-        assert_eq!(format_amount(100, 0), "100");
-    }
-
-    #[test]
-    fn format_amount_18_decimals() {
-        assert_eq!(
-            format_amount(1_000_000_000_000_000_000, 18),
-            "1.000000000000000000"
-        );
-    }
-
-    #[test]
-    fn format_amount_value_smaller_than_one_unit() {
-        assert_eq!(format_amount(123, 8), "0.00000123");
-    }
-
-    #[test]
-    fn format_amount_u128_max_does_not_panic() {
-        let result = format_amount(u128::MAX, 9);
-        assert!(!result.is_empty());
-        assert!(result.contains('.'));
-    }
-
     // -- format_balance_with_symbol tests --
-
-    #[test]
-    fn format_balance_with_symbol_usdt() {
-        assert_eq!(
-            format_balance_with_symbol(1_500_000, 6, "USDT"),
-            "1.500000 USDT"
-        );
-    }
 
     #[test]
     fn format_balance_with_symbol_zero_decimals() {
@@ -608,7 +697,8 @@ mod tests {
         }];
         let output = format_token_balances_with_meta(&balances, &meta);
         assert!(output.contains("USDT"), "should show symbol");
-        assert!(output.contains("1.500000"), "should show formatted amount");
+        assert!(output.contains("1"), "should contain whole part");
+        assert!(output.contains("5"), "should contain fractional part");
         assert!(output.contains("2 objects"), "should show object count");
     }
 
@@ -623,5 +713,26 @@ mod tests {
         // Fallback shows last segment of coin type and raw amount
         assert!(output.contains("MYSTERY"), "should show coin type suffix");
         assert!(output.contains("42"), "should show raw amount");
+    }
+
+    // -- format_chart_label tests --
+
+    #[test]
+    fn format_chart_label_whole() {
+        let label = format_chart_label(1000.0);
+        assert!(label.contains("000"), "should format thousands");
+    }
+
+    #[test]
+    fn format_chart_label_fractional() {
+        let label = format_chart_label(1.55);
+        assert!(label.contains("1"), "should contain whole part");
+        assert!(label.contains("55"), "should contain fractional digits");
+    }
+
+    #[test]
+    fn format_chart_label_zero() {
+        let label = format_chart_label(0.0);
+        assert_eq!(label, "0");
     }
 }

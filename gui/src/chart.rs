@@ -1,4 +1,5 @@
 use crate::{BORDER, MUTED, PRIMARY, SURFACE};
+use iota_wallet_core::display::format_chart_label;
 use iced::widget::canvas;
 use iced::{mouse, Pixels, Point, Theme};
 
@@ -80,11 +81,7 @@ impl<Message> canvas::Program<Message> for BalanceChart {
                     canvas::Stroke::default().with_color(BORDER).with_width(0.5),
                 );
 
-                let label = if val >= 1000.0 {
-                    format!("{:.0}", val)
-                } else {
-                    format!("{:.2}", val)
-                };
+                let label = format_chart_label(val);
                 frame.fill_text(canvas::Text {
                     content: label,
                     position: Point::new(2.0, y - 6.0),
