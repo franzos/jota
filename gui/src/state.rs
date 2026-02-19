@@ -1,8 +1,8 @@
-use iota_wallet_core::network::NetworkClient;
-use iota_wallet_core::service::WalletService;
-use iota_wallet_core::wallet::{AccountRecord, NetworkConfig, Wallet};
-use iota_wallet_core::Address;
-use iota_wallet_core::ObjectId;
+use jota_core::network::NetworkClient;
+use jota_core::service::WalletService;
+use jota_core::wallet::{AccountRecord, NetworkConfig, Wallet};
+use jota_core::Address;
+use jota_core::ObjectId;
 use std::fmt;
 use std::sync::Arc;
 
@@ -58,7 +58,7 @@ pub(crate) struct WalletInfo {
     pub(crate) service: Arc<WalletService>,
     pub(crate) is_mainnet: bool,
     pub(crate) is_hardware: bool,
-    pub(crate) hardware_kind: Option<iota_wallet_core::HardwareKind>,
+    pub(crate) hardware_kind: Option<jota_core::HardwareKind>,
     pub(crate) account_index: u64,
     pub(crate) known_accounts: Vec<AccountRecord>,
     /// Explicitly configured package (env var), not the resolved testnet default.
@@ -78,13 +78,13 @@ impl fmt::Debug for WalletInfo {
 
 impl WalletInfo {
     pub(crate) fn from_wallet(wallet: &Wallet) -> anyhow::Result<Self> {
-        let signer: Arc<dyn iota_wallet_core::Signer> = Arc::new(wallet.signer()?);
+        let signer: Arc<dyn jota_core::Signer> = Arc::new(wallet.signer()?);
         Self::from_wallet_with_signer(wallet, signer)
     }
 
     pub(crate) fn from_wallet_with_signer(
         wallet: &Wallet,
-        signer: Arc<dyn iota_wallet_core::Signer>,
+        signer: Arc<dyn jota_core::Signer>,
     ) -> anyhow::Result<Self> {
         let notarization_package = std::env::var("IOTA_NOTARIZATION_PKG_ID")
             .ok()

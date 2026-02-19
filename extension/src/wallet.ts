@@ -63,7 +63,7 @@ function sendRequest(
     });
 
     const msg: BridgeMessage = {
-      type: "iota-wallet-request",
+      type: "jota-request",
       id,
       method,
       params,
@@ -75,7 +75,7 @@ function sendRequest(
 // Listen for responses from the content script
 window.addEventListener("message", (event: MessageEvent<BridgeMessage>) => {
   if (event.source !== window) return;
-  if (event.data?.type !== "iota-wallet-response") return;
+  if (event.data?.type !== "jota-response") return;
 
   const { id, result, error } = event.data;
   const pending = pendingRequests.get(id);
@@ -115,9 +115,9 @@ const WALLET_ICON =
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="%232559f5"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="16" font-family="sans-serif" font-weight="bold">I</text></svg>'
   )}` as const;
 
-class IotaDesktopWallet implements Wallet {
+class JotaWallet implements Wallet {
   readonly version = "1.0.0" as const;
-  readonly name = "IOTA Desktop Wallet";
+  readonly name = "Jota";
   readonly icon = WALLET_ICON;
   readonly chains: readonly string[] = ["iota:mainnet", "iota:testnet", "iota:devnet"];
 
@@ -220,7 +220,7 @@ class IotaDesktopWallet implements Wallet {
         try {
           listener(...args);
         } catch (e) {
-          console.error("IOTA wallet event listener error:", e);
+          console.error("Jota wallet event listener error:", e);
         }
       }
     }
@@ -276,4 +276,4 @@ function registerWallet(wallet: Wallet): void {
 }
 
 // Register on load
-registerWallet(new IotaDesktopWallet());
+registerWallet(new JotaWallet());

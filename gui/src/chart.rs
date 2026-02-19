@@ -1,7 +1,7 @@
 use crate::{BORDER, MUTED, PRIMARY, SURFACE};
 use iced::widget::canvas;
 use iced::{mouse, Pixels, Point, Theme};
-use iota_wallet_core::display::format_chart_label;
+use jota_core::display::format_chart_label;
 
 // -- Balance chart (canvas) --
 

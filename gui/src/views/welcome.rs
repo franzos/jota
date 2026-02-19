@@ -3,7 +3,7 @@ use crate::state::Screen;
 use crate::{styles, App, MUTED};
 use iced::widget::{button, column, row, svg, text, Space};
 use iced::{Element, Fill, Length};
-use iota_wallet_core::wallet::{HardwareKind, Network, WalletType};
+use jota_core::wallet::{HardwareKind, Network, WalletType};
 
 impl App {
     pub(crate) fn view_wallet_select(&self) -> Element<'_, Message> {

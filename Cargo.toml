@@ -7,5 +7,5 @@ version = "0.1.11"
 edition = "2021"
 authors = ["Franz Geffke <mail@gofranz.com>"]
 license = "MIT"
-repository = "https://github.com/franzos/iota-wallet"
+repository = "https://github.com/franzos/jota"
 description = "Monero-inspired wallet for IOTA Rebased"

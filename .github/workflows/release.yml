@@ -37,15 +37,15 @@ jobs:
       - name: Package
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf ../../../iota-wallet-${{ matrix.target }}.tar.gz iota-wallet iota-wallet-gui
+          tar czf ../../../jota-${{ matrix.target }}.tar.gz jota jota-gui
           cd ../../..
-          shasum -a 256 iota-wallet-${{ matrix.target }}.tar.gz > iota-wallet-${{ matrix.target }}.tar.gz.sha256
+          shasum -a 256 jota-${{ matrix.target }}.tar.gz > jota-${{ matrix.target }}.tar.gz.sha256
 
       - name: Package AppImage
         if: contains(matrix.target, 'linux')
         run: |
           sudo apt-get update && sudo apt-get install -y librsvg2-bin
-          rsvg-convert -w 256 -h 256 gui/assets/icon.svg -o iota-wallet-gui.png
+          rsvg-convert -w 256 -h 256 gui/assets/icon.svg -o jota-gui.png
 
           export APPIMAGE_EXTRACT_AND_RUN=1
 
@@ -53,22 +53,22 @@ jobs:
           wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage
           chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-appimage-x86_64.AppImage
 
-          export OUTPUT=iota-wallet-gui-${{ matrix.target }}.AppImage
+          export OUTPUT=jota-gui-${{ matrix.target }}.AppImage
           ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
-            --executable target/${{ matrix.target }}/release/iota-wallet-gui \
-            --desktop-file gui/assets/iota-wallet-gui.desktop \
-            --icon-file iota-wallet-gui.png \
+            --executable target/${{ matrix.target }}/release/jota-gui \
+            --desktop-file gui/assets/jota-gui.desktop \
+            --icon-file jota-gui.png \
             --output appimage
 
-          shasum -a 256 iota-wallet-gui-${{ matrix.target }}.AppImage > iota-wallet-gui-${{ matrix.target }}.AppImage.sha256
+          shasum -a 256 jota-gui-${{ matrix.target }}.AppImage > jota-gui-${{ matrix.target }}.AppImage.sha256
 
       - name: Package DMG
         if: contains(matrix.target, 'apple-darwin')
         run: |
-          APP="IOTA Wallet.app"
+          APP="Jota.app"
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-          cp target/${{ matrix.target }}/release/iota-wallet-gui "$APP/Contents/MacOS/"
+          cp target/${{ matrix.target }}/release/jota-gui "$APP/Contents/MacOS/"
 
           VERSION=${GITHUB_REF_NAME#v}
           cat > "$APP/Contents/Info.plist" << PLIST
@@ -76,9 +76,9 @@ jobs:
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-            <key>CFBundleName</key><string>IOTA Wallet</string>
-            <key>CFBundleExecutable</key><string>iota-wallet-gui</string>
-            <key>CFBundleIdentifier</key><string>com.gofranz.iota-wallet</string>
+            <key>CFBundleName</key><string>Jota</string>
+            <key>CFBundleExecutable</key><string>jota-gui</string>
+            <key>CFBundleIdentifier</key><string>com.gofranz.jota</string>
             <key>CFBundleVersion</key><string>${VERSION}</string>
             <key>CFBundleShortVersionString</key><string>${VERSION}</string>
             <key>CFBundleIconFile</key><string>AppIcon</string>
@@ -104,22 +104,22 @@ jobs:
           sips -z 1024 1024 icon_1024.png --out icon.iconset/icon_512x512@2x.png
           iconutil -c icns icon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
 
-          hdiutil create -volname "IOTA Wallet" -srcfolder "$APP" -ov -format UDZO \
-            iota-wallet-gui-${{ matrix.target }}.dmg
-          shasum -a 256 iota-wallet-gui-${{ matrix.target }}.dmg > iota-wallet-gui-${{ matrix.target }}.dmg.sha256
+          hdiutil create -volname "Jota" -srcfolder "$APP" -ov -format UDZO \
+            jota-gui-${{ matrix.target }}.dmg
+          shasum -a 256 jota-gui-${{ matrix.target }}.dmg > jota-gui-${{ matrix.target }}.dmg.sha256
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: iota-wallet-${{ matrix.target }}
+          name: jota-${{ matrix.target }}
           if-no-files-found: ignore
           path: |
-            iota-wallet-${{ matrix.target }}.tar.gz
-            iota-wallet-${{ matrix.target }}.tar.gz.sha256
-            iota-wallet-gui-${{ matrix.target }}.AppImage
-            iota-wallet-gui-${{ matrix.target }}.AppImage.sha256
-            iota-wallet-gui-${{ matrix.target }}.dmg
-            iota-wallet-gui-${{ matrix.target }}.dmg.sha256
+            jota-${{ matrix.target }}.tar.gz
+            jota-${{ matrix.target }}.tar.gz.sha256
+            jota-gui-${{ matrix.target }}.AppImage
+            jota-gui-${{ matrix.target }}.AppImage.sha256
+            jota-gui-${{ matrix.target }}.dmg
+            jota-gui-${{ matrix.target }}.dmg.sha256
 
   release:
     needs: [build]
@@ -136,9 +136,9 @@ jobs:
           generate_release_notes: true
           draft: false
           files: |
-            iota-wallet-*.tar.gz
-            iota-wallet-*.tar.gz.sha256
-            iota-wallet-gui-*.AppImage
-            iota-wallet-gui-*.AppImage.sha256
-            iota-wallet-gui-*.dmg
-            iota-wallet-gui-*.dmg.sha256
+            jota-*.tar.gz
+            jota-*.tar.gz.sha256
+            jota-gui-*.AppImage
+            jota-gui-*.AppImage.sha256
+            jota-gui-*.dmg
+            jota-gui-*.dmg.sha256

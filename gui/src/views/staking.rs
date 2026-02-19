@@ -2,8 +2,8 @@ use crate::messages::Message;
 use crate::{styles, App, MUTED};
 use iced::widget::{button, column, container, row, table, text, text_input, Space};
 use iced::{Element, Fill, Font, Length};
-use iota_wallet_core::display::format_balance;
-use iota_wallet_core::network::StakeStatus;
+use jota_core::display::format_balance;
+use jota_core::network::StakeStatus;
 
 /// Pre-formatted row data for the active stakes table.
 #[derive(Clone)]

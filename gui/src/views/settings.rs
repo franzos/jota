@@ -2,7 +2,7 @@ use crate::messages::Message;
 use crate::{styles, App, MUTED};
 use iced::widget::{button, column, container, row, text, text_input, Space};
 use iced::{Element, Fill};
-use iota_wallet_core::wallet::Network;
+use jota_core::wallet::Network;
 use zeroize::Zeroizing;
 
 impl App {

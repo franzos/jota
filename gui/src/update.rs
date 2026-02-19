@@ -6,16 +6,16 @@ use crate::state::{PendingApproval, Screen, WalletInfo};
 use crate::App;
 use iced::widget::qr_code;
 use iced::Task;
-use iota_wallet_core::cache::TransactionCache;
-use iota_wallet_core::display::{parse_iota_amount, parse_token_amount};
-use iota_wallet_core::network::{
+use jota_core::cache::TransactionCache;
+use jota_core::display::{parse_iota_amount, parse_token_amount};
+use jota_core::network::{
     CoinMeta, NetworkClient, NftSummary, StakedIotaSummary, TokenBalance, TransactionFilter,
     ValidatorSummary,
 };
-use iota_wallet_core::service::WalletService;
-use iota_wallet_core::wallet::{Network, NetworkConfig, Wallet};
-use iota_wallet_core::{list_wallets, validate_wallet_name};
-use iota_wallet_core::{verify_message, ObjectId, Recipient, SignedMessage};
+use jota_core::service::WalletService;
+use jota_core::wallet::{Network, NetworkConfig, Wallet};
+use jota_core::{list_wallets, validate_wallet_name};
+use jota_core::{verify_message, ObjectId, Recipient, SignedMessage};
 use std::sync::Arc;
 use zeroize::{Zeroize, Zeroizing};
 
@@ -119,9 +119,9 @@ impl App {
 
                         #[cfg(feature = "ledger")]
                         if wallet.is_hardware() {
-                            use iota_wallet_core::ledger_signer::connect_and_verify;
+                            use jota_core::ledger_signer::connect_and_verify;
 
-                            let bip32_path = iota_wallet_core::bip32_path_for(
+                            let bip32_path = jota_core::bip32_path_for(
                                 wallet.network_config().network,
                                 wallet.account_index() as u32,
                             );
@@ -331,10 +331,10 @@ impl App {
                     async move {
                         #[cfg(feature = "ledger")]
                         {
-                            use iota_wallet_core::ledger_signer::connect_with_verification;
-                            use iota_wallet_core::Signer;
+                            use jota_core::ledger_signer::connect_with_verification;
+                            use jota_core::Signer;
 
-                            let bip32_path = iota_wallet_core::bip32_path_for(config.network, 0);
+                            let bip32_path = jota_core::bip32_path_for(config.network, 0);
 
                             let signer = tokio::task::spawn_blocking(move || {
                                 connect_with_verification(bip32_path)
@@ -351,7 +351,7 @@ impl App {
                                 &pw,
                                 address,
                                 config,
-                                iota_wallet_core::HardwareKind::Ledger,
+                                jota_core::HardwareKind::Ledger,
                             )?;
                             WalletInfo::from_wallet_with_signer(&wallet, Arc::new(signer))
                         }
@@ -969,9 +969,9 @@ impl App {
 
                         #[cfg(feature = "ledger")]
                         if is_hardware {
-                            use iota_wallet_core::ledger_signer::connect_with_verification;
-                            use iota_wallet_core::Signer;
-                            let bip32_path = iota_wallet_core::bip32_path_for(
+                            use jota_core::ledger_signer::connect_with_verification;
+                            use jota_core::Signer;
+                            let bip32_path = jota_core::bip32_path_for(
                                 wallet.network_config().network,
                                 index as u32,
                             );

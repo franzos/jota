@@ -1,11 +1,11 @@
 use crate::native_messaging::NativeRequest;
 use crate::state::{Screen, SignMode, WalletInfo};
 use crate::TokenOption;
-use iota_wallet_core::network::{
+use jota_core::network::{
     CoinMeta, NftSummary, StakedIotaSummary, TokenBalance, TransactionSummary, ValidatorSummary,
 };
-use iota_wallet_core::wallet::Network;
-use iota_wallet_core::SignedMessage;
+use jota_core::wallet::Network;
+use jota_core::SignedMessage;
 use zeroize::Zeroizing;
 
 /// (transactions, total_count, epoch_deltas)

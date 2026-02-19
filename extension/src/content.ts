@@ -11,7 +11,7 @@ script.onload = () => script.remove();
 // Listen for requests from the page (wallet.ts)
 window.addEventListener("message", (event: MessageEvent<BridgeMessage>) => {
   if (event.source !== window) return;
-  if (event.data?.type !== "iota-wallet-request") return;
+  if (event.data?.type !== "jota-request") return;
 
   const { id, method, params } = event.data;
   if (!id || !method) return;
@@ -22,7 +22,7 @@ window.addEventListener("message", (event: MessageEvent<BridgeMessage>) => {
     (response: NativeResponse) => {
       // Relay the response back to the page
       const msg: BridgeMessage = {
-        type: "iota-wallet-response",
+        type: "jota-response",
         id,
         result: response?.result,
         error: response?.error,

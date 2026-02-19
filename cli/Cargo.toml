@@ -1,5 +1,5 @@
 [package]
-name = "iota-wallet"
+name = "jota"
 description = "Monero-inspired REPL wallet for IOTA Rebased"
 version.workspace = true
 edition.workspace = true
@@ -8,16 +8,16 @@ license.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "iota-wallet"
+name = "jota"
 path = "src/main.rs"
 
 [features]
 default = ["ledger"]
-hardware-wallets = ["iota-wallet-core/hardware-wallets"]
-ledger = ["hardware-wallets", "iota-wallet-core/ledger"]
+hardware-wallets = ["jota-core/hardware-wallets"]
+ledger = ["hardware-wallets", "jota-core/ledger"]
 
 [dependencies]
-iota-wallet-core = { path = "../core" }
+jota-core = { path = "../core" }
 clap = { version = "4", features = ["derive", "env"] }
 reedline = "0.45"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

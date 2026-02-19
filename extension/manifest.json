@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "IOTA Desktop Wallet Bridge",
+  "name": "Jota Wallet Bridge",
   "version": "0.1.0",
-  "description": "Bridges dApps to the IOTA Desktop Wallet via Chrome Native Messaging",
+  "description": "Bridges dApps to the Jota wallet via Chrome Native Messaging",
   "permissions": ["nativeMessaging"],
   "background": {
     "service_worker": "dist/background.js",

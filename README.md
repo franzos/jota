@@ -1,6 +1,11 @@
-# IOTA Wallet
+# Jota
 
-A Monero-inspired wallet for IOTA Rebased. Supports interactive mode, one-shot commands for scripting, a native GUI, and encrypted wallet files.
+<p align="center">
+  <img src="assets/logo.svg" alt="Jota" width="480">
+</p>
+<p align="center">
+  A Monero-inspired wallet for IOTA Rebased. Supports interactive mode, one-shot commands for scripting, a native GUI, and encrypted wallet files.
+</p>
 
 **NOTE: This is an EARLY PROTOTYPE. USE AT YOUR OWN RISK.**
 
@@ -8,38 +13,38 @@ A Monero-inspired wallet for IOTA Rebased. Supports interactive mode, one-shot c
 
 **Pre-built binaries:**
 
-Download the latest release from [GitHub Releases](https://github.com/franzos/iota-wallet/releases):
+Download the latest release from [GitHub Releases](https://github.com/franzos/jota/releases):
 
 ```bash
 # Linux (x86_64)
-curl -sL https://github.com/franzos/iota-wallet/releases/latest/download/iota-wallet-x86_64-unknown-linux-gnu.tar.gz | tar xz
-sudo mv iota-wallet /usr/local/bin/
+curl -sL https://github.com/franzos/jota/releases/latest/download/jota-x86_64-unknown-linux-gnu.tar.gz | tar xz
+sudo mv jota /usr/local/bin/
 
 # macOS (Apple Silicon)
-curl -sL https://github.com/franzos/iota-wallet/releases/latest/download/iota-wallet-aarch64-apple-darwin.tar.gz | tar xz
-sudo mv iota-wallet /usr/local/bin/
+curl -sL https://github.com/franzos/jota/releases/latest/download/jota-aarch64-apple-darwin.tar.gz | tar xz
+sudo mv jota /usr/local/bin/
 
 # macOS (Intel)
-curl -sL https://github.com/franzos/iota-wallet/releases/latest/download/iota-wallet-x86_64-apple-darwin.tar.gz | tar xz
-sudo mv iota-wallet /usr/local/bin/
+curl -sL https://github.com/franzos/jota/releases/latest/download/jota-x86_64-apple-darwin.tar.gz | tar xz
+sudo mv jota /usr/local/bin/
 ```
 
 ## Quick start
 
 ```bash
 # Launch the REPL (testnet by default)
-iota-wallet
+jota
 
 # Use a named wallet
-iota-wallet --wallet mywallet
+jota --wallet mywallet
 
 # One-shot commands for scripting
-iota-wallet --cmd "balance"
-iota-wallet --cmd "address" --json
-iota-wallet --wallet mywallet --password-stdin --cmd "balance" < password.txt
+jota --cmd "balance"
+jota --cmd "address" --json
+jota --wallet mywallet --password-stdin --cmd "balance" < password.txt
 
 # Use a specific account index (derives a different address from the same seed)
-iota-wallet --account 1 --cmd "address"
+jota --account 1 --cmd "address"
 ```
 
 On first launch you'll be prompted to create a new wallet or recover from a seed phrase. The wallet file is encrypted with your password (argon2id + AES-256-GCM).
@@ -81,10 +86,10 @@ Hardware wallet signing is supported via Ledger devices (Nano S, Nano S+, Nano X
 
 ```bash
 # CLI — select "Connect Ledger" when creating a new wallet
-iota-wallet --wallet myledger
+jota --wallet myledger
 
 # GUI — click "Connect Ledger" on the welcome screen
-iota-wallet-gui
+jota-gui
 ```
 
 Build with Ledger support:
@@ -101,9 +106,9 @@ cargo build --release --features ledger
 Launch the GUI with:
 
 ```bash
-iota-wallet-gui
-iota-wallet-gui --mainnet
-iota-wallet-gui --devnet
+jota-gui
+jota-gui --mainnet
+jota-gui --devnet
 ```
 
 The GUI supports wallet creation, recovery, sending/receiving IOTA, transaction history with pagination, staking/unstaking, a balance chart, multi-account switching, and password changes. The GUI requires X11 or Wayland on Linux.
@@ -114,7 +119,7 @@ A companion browser extension bridges dApps (like the [IOTA Wallet Dashboard](ht
 
 **Setup:**
 
-1. Download `iota-wallet-extension.zip` from [Releases](https://github.com/franzos/iota-wallet/releases) and unzip it
+1. Download `jota-extension.zip` from [Releases](https://github.com/franzos/jota/releases) and unzip it
 2. Open `chrome://extensions`, enable Developer mode, click "Load unpacked", select the unzipped folder
 3. Click the extension icon in the toolbar — copy the Extension ID
 4. In the wallet GUI, go to Settings → Browser Extension, paste the ID, click "Install Native Host"
@@ -160,25 +165,25 @@ Amounts are in IOTA (e.g. `1.5` for 1.5 IOTA). Tab completion is available in th
 Testnet by default. Override with flags:
 
 ```bash
-iota-wallet --mainnet
-iota-wallet --devnet
-iota-wallet --node https://custom-graphql-endpoint.example.com
-iota-wallet --node http://localhost:9125/graphql --insecure
+jota --mainnet
+jota --devnet
+jota --node https://custom-graphql-endpoint.example.com
+jota --node http://localhost:9125/graphql --insecure
 ```
 
 The `--insecure` flag allows plain HTTP connections (for local development). The network is stored in the wallet file. CLI flags override the stored config if explicitly set.
 
 ## Storage
 
-Wallet files live in `~/.iota-wallet/`. Transactions are cached locally for pagination and balance history.
+Wallet files live in `~/.jota/`. Transactions are cached locally for pagination and balance history.
 
 ```
-~/.iota-wallet/
+~/.jota/
 ├── default.wallet    # encrypted (mode 0600)
 └── mywallet.wallet
 
-# Linux: ~/.local/share/iota-wallet/
-# macOS: ~/Library/Application Support/iota-wallet/
+# Linux: ~/.local/share/jota/
+# macOS: ~/Library/Application Support/jota/
 └── transactions.db   # SQLite cache (mode 0600)
 ```
 

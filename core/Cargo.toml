@@ -1,6 +1,6 @@
 [package]
-name = "iota-wallet-core"
-description = "Core library for the IOTA Rebased wallet"
+name = "jota-core"
+description = "Core library for the Jota IOTA wallet"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

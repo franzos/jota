@@ -2,7 +2,7 @@
 
 import type { NativeRequest, NativeResponse } from "./protocol.js";
 
-const NATIVE_HOST = "org.iota.wallet";
+const NATIVE_HOST = "org.jota.wallet";
 
 let port: chrome.runtime.Port | null = null;
 const pending = new Map<

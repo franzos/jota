@@ -1,11 +1,11 @@
 /// Integration tests.
 /// Offline tests run by default. Network tests require: cargo test -- --ignored
-use iota_wallet_core::cache::TransactionCache;
-use iota_wallet_core::commands::Command;
-use iota_wallet_core::network::{
+use jota_core::cache::TransactionCache;
+use jota_core::commands::Command;
+use jota_core::network::{
     NetworkClient, TransactionDirection, TransactionFilter, TransactionSummary,
 };
-use iota_wallet_core::wallet::{Network, NetworkConfig, Wallet};
+use jota_core::wallet::{Network, NetworkConfig, Wallet};
 use std::time::Duration;
 
 fn testnet_config() -> NetworkConfig {
@@ -522,15 +522,15 @@ fn wallet_meta_roundtrip() {
     std::fs::write(&wallet_path, b"dummy").unwrap();
 
     // Write meta
-    iota_wallet_core::write_wallet_meta(&wallet_path, iota_wallet_core::WalletType::Software)
+    jota_core::write_wallet_meta(&wallet_path, jota_core::WalletType::Software)
         .expect("failed to write meta");
 
-    let entries = iota_wallet_core::list_wallets(dir.path());
+    let entries = jota_core::list_wallets(dir.path());
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].name, "meta-test");
     assert!(matches!(
         entries[0].wallet_type,
-        iota_wallet_core::WalletType::Software
+        jota_core::WalletType::Software
     ));
 }
 
@@ -661,8 +661,8 @@ fn cache_epoch_deltas_with_commit_sync() {
 
 #[test]
 fn validate_wallet_name_rejects_traversal() {
-    assert!(iota_wallet_core::validate_wallet_name("my-wallet").is_ok());
-    assert!(iota_wallet_core::validate_wallet_name("../etc/passwd").is_err());
-    assert!(iota_wallet_core::validate_wallet_name("foo/bar").is_err());
-    assert!(iota_wallet_core::validate_wallet_name("").is_err());
+    assert!(jota_core::validate_wallet_name("my-wallet").is_ok());
+    assert!(jota_core::validate_wallet_name("../etc/passwd").is_err());
+    assert!(jota_core::validate_wallet_name("foo/bar").is_err());
+    assert!(jota_core::validate_wallet_name("").is_err());
 }

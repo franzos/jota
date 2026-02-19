@@ -1,17 +1,17 @@
 use crate::Cli;
 /// REPL shell — Reedline-based interactive wallet session.
 use anyhow::{Context, Result};
-use iota_wallet_core::commands::Command;
-use iota_wallet_core::list_wallets;
-use iota_wallet_core::network::NetworkClient;
-use iota_wallet_core::service::WalletService;
-use iota_wallet_core::wallet::Wallet;
+use jota_core::commands::Command;
+use jota_core::list_wallets;
+use jota_core::network::NetworkClient;
+use jota_core::service::WalletService;
+use jota_core::wallet::Wallet;
 use reedline::{DefaultCompleter, DefaultPrompt, DefaultPromptSegment, Reedline, Signal};
 use std::sync::Arc;
 use zeroize::{Zeroize, Zeroizing};
 
 pub async fn run_repl(cli: &Cli) -> Result<()> {
-    println!("IOTA Wallet v{}", env!("CARGO_PKG_VERSION"));
+    println!("Jota v{}", env!("CARGO_PKG_VERSION"));
     println!("Network: {}", cli.network_config().network);
     println!();
 
@@ -24,7 +24,7 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
         println!("Existing wallets:");
         for entry in &wallets {
             let suffix = match entry.wallet_type {
-                iota_wallet_core::WalletType::Hardware(kind) => format!(" ({kind})"),
+                jota_core::WalletType::Hardware(kind) => format!(" ({kind})"),
                 _ => String::new(),
             };
             println!("  - {}{suffix}", entry.name);
@@ -47,9 +47,9 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
         if w.is_hardware() {
             #[cfg(feature = "ledger")]
             {
-                use iota_wallet_core::ledger_signer::connect_and_verify;
+                use jota_core::ledger_signer::connect_and_verify;
 
-                let path = iota_wallet_core::bip32_path_for(
+                let path = jota_core::bip32_path_for(
                     w.network_config().network,
                     w.account_index() as u32,
                 );
@@ -104,10 +104,10 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
             }
             #[cfg(feature = "ledger")]
             WalletAction::ConnectHardware => {
-                use iota_wallet_core::ledger_signer::connect_with_verification;
-                use iota_wallet_core::Signer;
+                use jota_core::ledger_signer::connect_with_verification;
+                use jota_core::Signer;
 
-                let path = iota_wallet_core::bip32_path_for(network_config.network, 0);
+                let path = jota_core::bip32_path_for(network_config.network, 0);
                 println!("Connecting to hardware wallet...");
                 println!("Verify the address on your device...");
                 let signer = connect_with_verification(path)?;
@@ -120,7 +120,7 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                     password.as_bytes(),
                     address,
                     network_config,
-                    iota_wallet_core::HardwareKind::Ledger,
+                    jota_core::HardwareKind::Ledger,
                 )?;
                 println!();
                 println!("Hardware wallet created in {}", wallet_path.display());
@@ -142,7 +142,7 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
     let network = NetworkClient::new(&effective_config, cli.insecure)?;
     let notarization_pkg = cli.notarization_package_id()?;
 
-    let signer: Arc<dyn iota_wallet_core::Signer> = build_repl_signer(&wallet, cli)?;
+    let signer: Arc<dyn jota_core::Signer> = build_repl_signer(&wallet, cli)?;
 
     let mut service =
         WalletService::new(network, signer).with_notarization_package(notarization_pkg);
@@ -219,9 +219,9 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                                 // For hardware wallets, reconnect the device with the new path
                                 #[cfg(feature = "ledger")]
                                 if wallet.is_hardware() {
-                                    use iota_wallet_core::ledger_signer::connect_with_verification;
-                                    use iota_wallet_core::Signer;
-                                    let path = iota_wallet_core::bip32_path_for(
+                                    use jota_core::ledger_signer::connect_with_verification;
+                                    use jota_core::Signer;
+                                    let path = jota_core::bip32_path_for(
                                         wallet.network_config().network,
                                         idx as u32,
                                     );
@@ -442,12 +442,12 @@ fn prompt_mnemonic() -> Result<Zeroizing<String>> {
 }
 
 /// Build the appropriate signer for the REPL session.
-fn build_repl_signer(wallet: &Wallet, _cli: &Cli) -> Result<Arc<dyn iota_wallet_core::Signer>> {
+fn build_repl_signer(wallet: &Wallet, _cli: &Cli) -> Result<Arc<dyn jota_core::Signer>> {
     if wallet.is_hardware() {
         #[cfg(feature = "ledger")]
         {
-            use iota_wallet_core::ledger_signer::connect_and_verify;
-            let path = iota_wallet_core::bip32_path_for(
+            use jota_core::ledger_signer::connect_and_verify;
+            let path = jota_core::bip32_path_for(
                 wallet.network_config().network,
                 wallet.account_index() as u32,
             );

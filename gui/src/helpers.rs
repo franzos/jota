@@ -3,8 +3,8 @@ use crate::state::Screen;
 use crate::{styles, App, MUTED};
 use iced::widget::{button, column, container, row, table, text, Column, Space};
 use iced::{Element, Fill, Font, Length};
-use iota_wallet_core::display::{format_balance, nanos_to_iota};
-use iota_wallet_core::network::{TransactionDirection, TransactionSummary};
+use jota_core::display::{format_balance, nanos_to_iota};
+use jota_core::network::{TransactionDirection, TransactionSummary};
 
 /// Pre-formatted row data passed to the table column view closures.
 #[derive(Clone)]

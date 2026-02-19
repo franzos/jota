@@ -119,7 +119,7 @@
 - `show_transfer` command to look up a transaction by digest
 - `tokens` command to show all coin/token balances
 - `status` command: shows current epoch, gas price, network, and node URL; accepts optional custom node
-- GUI frontend (`iota-wallet-gui`) using iced
+- GUI frontend (`jota-gui`) using iced
 
 ### Changed
 - Transfer and stake now require confirmation before signing

@@ -19,7 +19,7 @@ export interface NativeError {
 
 /** Messages relayed between content script and page context via window.postMessage. */
 export interface BridgeMessage {
-  type: "iota-wallet-request" | "iota-wallet-response";
+  type: "jota-request" | "jota-response";
   id: string;
   method?: string;
   params?: Record<string, unknown>;

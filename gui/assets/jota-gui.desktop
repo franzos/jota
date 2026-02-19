@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=IOTA Wallet
-Exec=iota-wallet-gui
-Icon=iota-wallet-gui
+Name=Jota
+Exec=jota-gui
+Icon=jota-gui
 Type=Application
 Categories=Finance;Network;

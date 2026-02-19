@@ -1,5 +1,5 @@
 [package]
-name = "iota-wallet-gui"
+name = "jota-gui"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -7,16 +7,16 @@ license.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "iota-wallet-gui"
+name = "jota-gui"
 path = "src/main.rs"
 
 [features]
 default = ["ledger"]
-hardware-wallets = ["iota-wallet-core/hardware-wallets"]
-ledger = ["hardware-wallets", "iota-wallet-core/ledger"]
+hardware-wallets = ["jota-core/hardware-wallets"]
+ledger = ["hardware-wallets", "jota-core/ledger"]
 
 [dependencies]
-iota-wallet-core = { path = "../core" }
+jota-core = { path = "../core" }
 iced = { version = "0.14", features = ["tokio", "svg", "canvas", "qr_code"] }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 anyhow = "1"

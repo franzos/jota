@@ -2,20 +2,20 @@ mod repl;
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use iota_wallet_core::commands::Command;
-use iota_wallet_core::network::NetworkClient;
-use iota_wallet_core::service::WalletService;
-use iota_wallet_core::validate_wallet_name;
-use iota_wallet_core::wallet::{Network, NetworkConfig, Wallet};
-use iota_wallet_core::ObjectId;
+use jota_core::commands::Command;
+use jota_core::network::NetworkClient;
+use jota_core::service::WalletService;
+use jota_core::validate_wallet_name;
+use jota_core::wallet::{Network, NetworkConfig, Wallet};
+use jota_core::ObjectId;
 use std::path::PathBuf;
 use std::sync::Arc;
 use zeroize::Zeroizing;
 
 #[derive(Parser)]
 #[command(
-    name = "iota-wallet",
-    about = "IOTA Wallet — Monero-inspired REPL",
+    name = "jota",
+    about = "Jota — Monero-inspired IOTA REPL wallet",
     version
 )]
 pub(crate) struct Cli {
@@ -23,7 +23,7 @@ pub(crate) struct Cli {
     #[arg(long, default_value = "default")]
     wallet: String,
 
-    /// Wallet directory (default: ~/.iota-wallet)
+    /// Wallet directory (default: ~/.jota)
     #[arg(long)]
     wallet_dir: Option<PathBuf>,
 
@@ -74,7 +74,7 @@ impl Cli {
             Some(dir) => Ok(dir.clone()),
             None => Ok(dirs::home_dir()
                 .context("Cannot determine home directory. Set $HOME or use --wallet-dir.")?
-                .join(".iota-wallet")),
+                .join(".jota")),
         }
     }
 
@@ -192,7 +192,7 @@ async fn run_oneshot(cli: &Cli, cmd_str: &str) -> Result<()> {
     let wallet_path = cli.wallet_path()?;
     if !wallet_path.exists() {
         bail!(
-            "Wallet file not found: {}. Create one first by running iota-wallet without --cmd.",
+            "Wallet file not found: {}. Create one first by running jota without --cmd.",
             wallet_path.display()
         );
     }
@@ -205,7 +205,7 @@ async fn run_oneshot(cli: &Cli, cmd_str: &str) -> Result<()> {
     let network = NetworkClient::new(&effective_config, cli.insecure)?;
     let notarization_pkg = cli.notarization_package_id()?;
 
-    let signer: Arc<dyn iota_wallet_core::Signer> = build_signer(&wallet, cli)?;
+    let signer: Arc<dyn jota_core::Signer> = build_signer(&wallet, cli)?;
 
     let service = WalletService::new(network, signer).with_notarization_package(notarization_pkg);
 
@@ -232,13 +232,13 @@ async fn run_oneshot(cli: &Cli, cmd_str: &str) -> Result<()> {
 }
 
 /// Build the appropriate signer based on wallet type.
-fn build_signer(wallet: &Wallet, _cli: &Cli) -> Result<Arc<dyn iota_wallet_core::Signer>> {
+fn build_signer(wallet: &Wallet, _cli: &Cli) -> Result<Arc<dyn jota_core::Signer>> {
     if wallet.is_hardware() {
         #[cfg(feature = "ledger")]
         {
-            use iota_wallet_core::ledger_signer::connect_and_verify;
+            use jota_core::ledger_signer::connect_and_verify;
 
-            let path = iota_wallet_core::bip32_path_for(
+            let path = jota_core::bip32_path_for(
                 wallet.network_config().network,
                 wallet.account_index() as u32,
             );

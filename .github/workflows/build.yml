@@ -28,12 +28,12 @@ jobs:
       - name: Package extension
         run: |
           cd extension
-          zip -r ../iota-wallet-extension.zip \
+          zip -r ../jota-extension.zip \
             manifest.json popup.html popup.js icons/ dist/
       - uses: actions/upload-artifact@v4
         with:
-          name: iota-wallet-extension
-          path: iota-wallet-extension.zip
+          name: jota-extension
+          path: jota-extension.zip
 
   rust:
     name: Build (${{ matrix.target }})
@@ -51,17 +51,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Build CLI
-        run: cargo build --release -p iota-wallet
+        run: cargo build --release -p jota
       - name: Build GUI
-        run: cargo build --release -p iota-wallet-gui
+        run: cargo build --release -p jota-gui
       - name: Package
         run: |
-          tar czf iota-wallet-${{ matrix.target }}.tar.gz \
-            -C target/release iota-wallet iota-wallet-gui
+          tar czf jota-${{ matrix.target }}.tar.gz \
+            -C target/release jota jota-gui
       - uses: actions/upload-artifact@v4
         with:
-          name: iota-wallet-${{ matrix.target }}
-          path: iota-wallet-${{ matrix.target }}.tar.gz
+          name: jota-${{ matrix.target }}
+          path: jota-${{ matrix.target }}.tar.gz
 
   release:
     name: Release
@@ -78,7 +78,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/iota-wallet-x86_64-unknown-linux-gnu/*.tar.gz
-            artifacts/iota-wallet-aarch64-apple-darwin/*.tar.gz
-            artifacts/iota-wallet-x86_64-apple-darwin/*.tar.gz
-            artifacts/iota-wallet-extension/*.zip
+            artifacts/jota-x86_64-unknown-linux-gnu/*.tar.gz
+            artifacts/jota-aarch64-apple-darwin/*.tar.gz
+            artifacts/jota-x86_64-apple-darwin/*.tar.gz
+            artifacts/jota-extension/*.zip

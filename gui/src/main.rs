@@ -18,13 +18,13 @@ use iced::{Background, Color, Element, Fill, Font, Length, Subscription, Task, T
 use std::path::PathBuf;
 use zeroize::Zeroizing;
 
-use iota_wallet_core::display::{format_balance, format_balance_with_symbol};
-use iota_wallet_core::network::{
+use jota_core::display::{format_balance, format_balance_with_symbol};
+use jota_core::network::{
     CoinMeta, NftSummary, StakedIotaSummary, TokenBalance, TransactionSummary, ValidatorSummary,
 };
-use iota_wallet_core::wallet::{Network, NetworkConfig};
-use iota_wallet_core::SignedMessage;
-use iota_wallet_core::{list_wallets, WalletEntry};
+use jota_core::wallet::{Network, NetworkConfig};
+use jota_core::SignedMessage;
+use jota_core::{list_wallets, WalletEntry};
 
 use chart::BalanceChart;
 use messages::Message;
@@ -51,7 +51,7 @@ fn main() -> iced::Result {
     }
 
     iced::application(App::new, App::update, App::view)
-        .title("IOTA Wallet")
+        .title("Jota")
         .theme(App::theme)
         .subscription(App::subscription)
         .run()
@@ -245,7 +245,7 @@ impl App {
         let network_config = Self::parse_network_from_args();
         let wallet_dir = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join(".iota-wallet");
+            .join(".jota");
         let wallet_entries = list_wallets(&wallet_dir);
         let permissions = permissions::Permissions::load(&wallet_dir);
 
@@ -316,7 +316,7 @@ impl App {
             success_message: None,
             status_message: None,
             theme: Theme::custom(
-                "IOTA".to_string(),
+                "Jota".to_string(),
                 Palette {
                     background: BG,
                     text: Color::from_rgb(0.988, 0.988, 0.988),

@@ -4,7 +4,7 @@
 /// JSON object preceded by its byte-length as a little-endian u32.
 ///
 /// Single-instance relay: when Chrome spawns a second process and a GUI is already
-/// listening on `~/.iota-wallet/gui.sock`, the new process acts as a headless
+/// listening on `~/.jota/gui.sock`, the new process acts as a headless
 /// stdin↔socket byte forwarder instead of opening a duplicate window.
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
@@ -213,8 +213,8 @@ pub(crate) fn install_native_host(extension_id: &str) -> io::Result<Vec<std::pat
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Binary path is not UTF-8"))?;
 
     let manifest = serde_json::json!({
-        "name": "org.iota.wallet",
-        "description": "IOTA Desktop Wallet - Native Messaging Bridge",
+        "name": "org.jota.wallet",
+        "description": "Jota - Native Messaging Bridge",
         "path": binary_str,
         "type": "stdio",
         "allowed_origins": [format!("chrome-extension://{extension_id}/")]
@@ -248,7 +248,7 @@ pub(crate) fn install_native_host(extension_id: &str) -> io::Result<Vec<std::pat
         if let Some(parent) = dir.parent() {
             if parent.exists() {
                 std::fs::create_dir_all(dir)?;
-                let path = dir.join("org.iota.wallet.json");
+                let path = dir.join("org.jota.wallet.json");
                 std::fs::write(&path, &manifest)?;
                 installed.push(path);
             }
@@ -259,7 +259,7 @@ pub(crate) fn install_native_host(extension_id: &str) -> io::Result<Vec<std::pat
         // Fallback: create for Chromium anyway
         let dir = &browser_dirs[0];
         std::fs::create_dir_all(dir)?;
-        let path = dir.join("org.iota.wallet.json");
+        let path = dir.join("org.jota.wallet.json");
         std::fs::write(&path, &manifest)?;
         installed.push(path);
     }
@@ -273,7 +273,7 @@ pub(crate) fn install_native_host(extension_id: &str) -> io::Result<Vec<std::pat
 pub(crate) fn socket_path() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".iota-wallet")
+        .join(".jota")
         .join("gui.sock")
 }
 

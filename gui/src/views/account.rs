@@ -3,8 +3,8 @@ use crate::state::Screen;
 use crate::{styles, App, MUTED};
 use iced::widget::{button, canvas, column, container, row, text, Space};
 use iced::{Element, Fill, Length};
-use iota_wallet_core::display::format_balance_with_symbol;
-use iota_wallet_core::wallet::Network;
+use jota_core::display::format_balance_with_symbol;
+use jota_core::wallet::Network;
 
 impl App {
     pub(crate) fn view_account(&self) -> Element<'_, Message> {

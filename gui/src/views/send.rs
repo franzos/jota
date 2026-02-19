@@ -2,7 +2,7 @@ use crate::messages::Message;
 use crate::{styles, App, TokenOption, MUTED};
 use iced::widget::{button, column, container, pick_list, row, text, text_input, Space};
 use iced::{Element, Fill, Length};
-use iota_wallet_core::display::format_balance;
+use jota_core::display::format_balance;
 
 impl App {
     pub(crate) fn view_send(&self) -> Element<'_, Message> {

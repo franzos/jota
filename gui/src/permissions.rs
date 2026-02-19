@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// Per-wallet origin permissions, persisted as JSON at `~/.iota-wallet/permissions.json`.
+/// Per-wallet origin permissions, persisted as JSON at `~/.jota/permissions.json`.
 ///
 /// Keyed by wallet address (stable across renames).
 /// Each address maps to a list of origins that have been granted `connect` access.
