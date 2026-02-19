@@ -199,10 +199,7 @@ impl NetworkClient {
                     .get("commissionRate")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(0) as u32;
-                let apy = node
-                    .get("apy")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32;
+                let apy = node.get("apy").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
                 let staking_pool_iota_balance =
                     json_str_field::<u64>(node, "stakingPoolIotaBalance").unwrap_or(0);
                 let image_url = node
@@ -243,9 +240,10 @@ impl NetworkClient {
         }
 
         validators.sort_by(|a, b| {
-            b.age_epochs
-                .cmp(&a.age_epochs)
-                .then(b.staking_pool_iota_balance.cmp(&a.staking_pool_iota_balance))
+            b.age_epochs.cmp(&a.age_epochs).then(
+                b.staking_pool_iota_balance
+                    .cmp(&a.staking_pool_iota_balance),
+            )
         });
 
         Ok(validators)

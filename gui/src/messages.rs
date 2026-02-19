@@ -1,3 +1,4 @@
+use crate::native_messaging::NativeRequest;
 use crate::state::{Screen, SignMode, WalletInfo};
 use crate::TokenOption;
 use iota_wallet_core::network::{
@@ -125,6 +126,23 @@ pub(crate) enum Message {
     NotarizeDescriptionChanged(String),
     ConfirmNotarize,
     NotarizeCompleted(Result<String, String>),
+
+    // Native messaging (browser extension bridge)
+    NativeRequest(NativeRequest),
+    NativeClientConnected(std::sync::mpsc::Sender<crate::native_messaging::NativeResponse>),
+    NativeClientDisconnected,
+    ApproveNativeRequest,
+    RejectNativeRequest,
+    /// (request_id, Ok(result_json) | Err((error_code, error_message)))
+    NativeSignCompleted(Result<(String, serde_json::Value), (String, String, String)>),
+
+    // Native host installation
+    ExtensionIdChanged(String),
+    InstallNativeHost,
+    NativeHostInstalled(Result<Vec<std::path::PathBuf>, String>),
+
+    // Permissions
+    RevokeSitePermission(String),
 
     // Settings
     NetworkChanged(Network),

@@ -27,6 +27,9 @@ pub trait Signer: Send + Sync {
         anyhow::bail!("Address verification is only supported on hardware devices.")
     }
 
+    /// Return the raw Ed25519 public key bytes (32 bytes).
+    fn public_key_bytes(&self) -> Result<Vec<u8>>;
+
     /// Reconnect to the signing device (e.g. after it was unplugged or locked).
     /// Software signers are always connected, so the default is a no-op.
     fn reconnect(&self) -> Result<()> {
@@ -124,6 +127,12 @@ impl Signer for SoftwareSigner {
             public_key: Base64::encode_string(&pk_bytes),
             address: self.address.to_string(),
         })
+    }
+
+    fn public_key_bytes(&self) -> Result<Vec<u8>> {
+        let public_key = self.private_key.public_key();
+        let pk: &[u8; 32] = public_key.as_ref();
+        Ok(pk.to_vec())
     }
 
     fn address(&self) -> &Address {

@@ -84,7 +84,9 @@ pub fn decrypt(data: &[u8], password: &[u8]) -> Result<Zeroizing<Vec<u8>>, Walle
     let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| WalletFileError::DecryptionFailed)?;
     key.zeroize();
 
-    let nonce_arr: [u8; NONCE_LEN] = nonce_bytes.try_into().map_err(|_| WalletFileError::FileTooShort)?;
+    let nonce_arr: [u8; NONCE_LEN] = nonce_bytes
+        .try_into()
+        .map_err(|_| WalletFileError::FileTooShort)?;
     let nonce = Nonce::from(nonce_arr);
     let plaintext = cipher
         .decrypt(&nonce, ciphertext)

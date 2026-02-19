@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "IOTA Desktop Wallet Bridge",
+  "version": "0.1.0",
+  "description": "Bridges dApps to the IOTA Desktop Wallet via Chrome Native Messaging",
+  "permissions": ["nativeMessaging"],
+  "background": {
+    "service_worker": "dist/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["dist/wallet.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "icons": {
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}

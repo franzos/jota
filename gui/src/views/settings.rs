@@ -89,6 +89,83 @@ impl App {
         ]
         .spacing(16);
 
+        // Browser Extension bridge card
+        {
+            let ext_input = text_input("Chrome Extension ID", &self.extension_id)
+                .on_input(Message::ExtensionIdChanged)
+                .size(13);
+
+            let can_install = !self.extension_id.trim().is_empty();
+            let mut install_btn = button(text("Install Native Host").size(14))
+                .padding([10, 24])
+                .style(styles::btn_primary);
+            if can_install {
+                install_btn = install_btn.on_press(Message::InstallNativeHost);
+            }
+
+            let mut bridge_content =
+                column![
+                text("Browser Extension").size(16),
+                Space::new().height(4),
+                text("Connect dApps to this wallet via the browser extension.")
+                    .size(12)
+                    .color(MUTED),
+                text("Click the extension icon in your browser to copy its ID, then paste it here.")
+                    .size(12)
+                    .color(MUTED),
+                Space::new().height(4),
+                ext_input,
+                Space::new().height(8),
+                install_btn,
+            ]
+                .spacing(4);
+
+            if let Some(msg) = &self.success_message {
+                if msg.contains("Native host") {
+                    bridge_content =
+                        bridge_content.push(text(msg.as_str()).size(12).color(styles::ACCENT));
+                }
+            }
+
+            col = col.push(
+                container(bridge_content)
+                    .padding(24)
+                    .max_width(500)
+                    .style(styles::card),
+            );
+        }
+
+        // Connected Sites card
+        if let Some(info) = &self.wallet_info {
+            let sites = self.permissions.connected_sites(&info.address_string);
+            let mut sites_content =
+                column![text("Connected Sites").size(16), Space::new().height(4),].spacing(4);
+
+            if sites.is_empty() {
+                sites_content =
+                    sites_content.push(text("No connected sites").size(12).color(MUTED));
+            } else {
+                for origin in sites {
+                    let revoke_btn = button(text("Revoke").size(11))
+                        .padding([4, 12])
+                        .style(styles::btn_ghost)
+                        .on_press(Message::RevokeSitePermission(origin.clone()));
+                    sites_content = sites_content.push(
+                        row![text(origin).size(13), Space::new().width(Fill), revoke_btn,]
+                            .spacing(8)
+                            .align_y(iced::Alignment::Center),
+                    );
+                }
+            }
+
+            col = col.push(
+                container(sites_content)
+                    .padding(24)
+                    .max_width(500)
+                    .style(styles::card),
+            );
+        }
+
         if self.wallet_info.is_some() {
             // Change password card
             let old_pw = text_input("Current password", &self.settings_old_password)

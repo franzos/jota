@@ -1,6 +1,8 @@
 mod chart;
 mod helpers;
 mod messages;
+mod native_messaging;
+mod permissions;
 mod state;
 mod styles;
 mod update;
@@ -9,9 +11,9 @@ mod views;
 use iced::theme::Palette;
 use iced::widget::{
     button, column, container, mouse_area, opaque, pick_list, qr_code, row, scrollable, svg, text,
-    text_input, Stack, Space,
+    text_input, Space, Stack,
 };
-use iced::{Background, Color, Element, Fill, Font, Length, Task, Theme};
+use iced::{Background, Color, Element, Fill, Font, Length, Subscription, Task, Theme};
 
 use std::path::PathBuf;
 use zeroize::Zeroizing;
@@ -26,7 +28,8 @@ use iota_wallet_core::{list_wallets, WalletEntry};
 
 use chart::BalanceChart;
 use messages::Message;
-use state::{Screen, SignMode, WalletInfo};
+use native_messaging::NativeResponse;
+use state::{PendingApproval, Screen, SignMode, WalletInfo};
 
 // IOTA Explorer dark-mode palette (iota2.darkmode)
 const BG: Color = Color::from_rgb(0.051, 0.067, 0.090); // #0d1117
@@ -38,9 +41,19 @@ const MUTED: Color = Color::from_rgb(0.396, 0.459, 0.545); // #65758b (iota2-gra
 const PRIMARY: Color = Color::from_rgb(0.145, 0.349, 0.961); // #2559f5 (iota2-blue-600)
 
 fn main() -> iced::Result {
+    // Relay mode: if Chrome spawned us and a GUI is already listening, forward
+    // stdin↔socket and exit without opening a window.
+    #[cfg(unix)]
+    if native_messaging::is_native_messaging_host() {
+        if let Some(stream) = native_messaging::try_connect_relay() {
+            native_messaging::run_relay(stream); // divergent — never returns
+        }
+    }
+
     iced::application(App::new, App::update, App::view)
         .title("IOTA Wallet")
         .theme(App::theme)
+        .subscription(App::subscription)
         .run()
 }
 
@@ -131,6 +144,15 @@ struct App {
 
     // Persistent clipboard (Linux requires the instance to stay alive)
     clipboard: Option<arboard::Clipboard>,
+
+    // Native messaging (browser extension bridge)
+    pending_approval: Option<PendingApproval>,
+    native_response_tx: Option<std::sync::mpsc::Sender<NativeResponse>>,
+    buffered_native_requests: Vec<native_messaging::NativeRequest>,
+    extension_id: String,
+
+    // Per-wallet dApp origin permissions
+    permissions: permissions::Permissions,
 
     // Cached theme (avoids re-allocating every frame)
     theme: Theme,
@@ -225,6 +247,7 @@ impl App {
             .unwrap_or_else(|| PathBuf::from("."))
             .join(".iota-wallet");
         let wallet_entries = list_wallets(&wallet_dir);
+        let permissions = permissions::Permissions::load(&wallet_dir);
 
         let app = Self {
             screen: Screen::WalletSelect,
@@ -280,6 +303,15 @@ impl App {
             clipboard: arboard::Clipboard::new()
                 .map_err(|e| eprintln!("clipboard init failed: {e}"))
                 .ok(),
+            pending_approval: None,
+            native_response_tx: if native_messaging::is_native_messaging_host() {
+                Some(native_messaging::spawn_native_response_writer())
+            } else {
+                None
+            },
+            buffered_native_requests: Vec::new(),
+            extension_id: native_messaging::detect_extension_id().unwrap_or_default(),
+            permissions,
             error_message: None,
             success_message: None,
             status_message: None,
@@ -315,6 +347,18 @@ impl App {
 
     fn theme(&self) -> Theme {
         self.theme.clone()
+    }
+
+    fn subscription(&self) -> Subscription<Message> {
+        // Stdin subscription only when wallet is unlocked — Chrome's connect
+        // request buffers in stdin until the user unlocks, preserving the
+        // original mode-3 (direct NMH) behavior.
+        let stdin = if self.wallet_info.is_some() {
+            native_messaging::native_messaging_subscription()
+        } else {
+            Subscription::none()
+        };
+        Subscription::batch([native_messaging::socket_listener_subscription(), stdin])
     }
 
     // -- Views --
@@ -433,6 +477,28 @@ impl App {
                     .height(Fill)
                     .into();
             }
+        }
+
+        // Layer native messaging approval modal when pending
+        if let Some(overlay) = self.view_approval_modal() {
+            let backdrop = mouse_area(
+                container(opaque(overlay))
+                    .center_x(Fill)
+                    .center_y(Fill)
+                    .width(Fill)
+                    .height(Fill)
+                    .style(|_theme| container::Style {
+                        background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.55))),
+                        ..Default::default()
+                    }),
+            );
+
+            return Stack::new()
+                .push(main_layout)
+                .push(backdrop)
+                .width(Fill)
+                .height(Fill)
+                .into();
         }
 
         main_layout

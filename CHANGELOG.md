@@ -1,3 +1,8 @@
+## [0.1.11] - 2026-02-19
+
+### Added
+- Browser extension bridge for dApp integration (Wallet Standard)
+
 ## [0.1.10] - 2026-02-18
 
 ### Added

@@ -3,6 +3,9 @@ use std::sync::Arc;
 
 use iota_sdk::types::{Address, Digest, ObjectId};
 
+use base64ct::{Base64, Encoding};
+use iota_sdk::types::Transaction;
+
 use crate::error::{Result, WalletError};
 use crate::network::{
     CoinMeta, NetworkClient, NetworkStatus, NftSummary, StakedIotaSummary, TokenBalance,
@@ -45,6 +48,10 @@ impl WalletService {
 
     pub fn signer(&self) -> &Arc<dyn Signer> {
         &self.signer
+    }
+
+    pub fn network(&self) -> &NetworkClient {
+        &self.network
     }
 
     pub async fn balance(&self) -> Result<u64> {
@@ -288,6 +295,35 @@ impl WalletService {
                 coin_type,
                 amount,
             )
+            .await?)
+    }
+
+    /// Sign a pre-built BCS transaction (base64-encoded).
+    /// Returns the base64-encoded signature bytes.
+    pub async fn sign_raw_transaction(&self, tx_b64: &str) -> Result<(String, String)> {
+        let tx_bytes = Base64::decode_vec(tx_b64)
+            .map_err(|e| WalletError::InvalidState(format!("Invalid base64 transaction: {e}")))?;
+        let tx: Transaction = bcs::from_bytes(&tx_bytes)
+            .map_err(|e| WalletError::InvalidState(format!("Invalid BCS transaction: {e}")))?;
+
+        let objects = self.network.fetch_input_objects(&tx).await?;
+        let sig = self.signer.sign_transaction(&tx, &objects)?;
+        let sig_bytes = bcs::to_bytes(&sig).map_err(|e| {
+            WalletError::InvalidState(format!("Failed to serialize signature: {e}"))
+        })?;
+        Ok((tx_b64.to_string(), Base64::encode_string(&sig_bytes)))
+    }
+
+    /// Sign and execute a pre-built BCS transaction (base64-encoded).
+    pub async fn sign_and_execute_raw(&self, tx_b64: &str) -> Result<TransferResult> {
+        let tx_bytes = Base64::decode_vec(tx_b64)
+            .map_err(|e| WalletError::InvalidState(format!("Invalid base64 transaction: {e}")))?;
+        let tx: Transaction = bcs::from_bytes(&tx_bytes)
+            .map_err(|e| WalletError::InvalidState(format!("Invalid BCS transaction: {e}")))?;
+
+        Ok(self
+            .network
+            .sign_and_execute(&tx, self.signer.as_ref())
             .await?)
     }
 

@@ -14,12 +14,13 @@ use crate::network::{
 /// Cached system locale for number formatting.
 fn system_locale() -> &'static SystemLocale {
     static LOCALE: OnceLock<SystemLocale> = OnceLock::new();
-    LOCALE.get_or_init(|| SystemLocale::default().unwrap_or_else(|_| {
-        // Fallback: build from en locale
-        SystemLocale::from_name("en_US").unwrap_or_else(|_| {
-            SystemLocale::default().unwrap_or_else(|_| unreachable!())
+    LOCALE.get_or_init(|| {
+        SystemLocale::default().unwrap_or_else(|_| {
+            // Fallback: build from en locale
+            SystemLocale::from_name("en_US")
+                .unwrap_or_else(|_| SystemLocale::default().unwrap_or_else(|_| unreachable!()))
         })
-    }))
+    })
 }
 
 /// Format a raw token amount using the given number of decimal places,
@@ -34,7 +35,12 @@ pub fn format_amount(value: u128, decimals: u8) -> String {
 }
 
 /// Format with explicit separators — used by tests for deterministic output.
-fn format_amount_with_locale(value: u128, decimals: u8, thousands_sep: &str, decimal_sep: &str) -> String {
+fn format_amount_with_locale(
+    value: u128,
+    decimals: u8,
+    thousands_sep: &str,
+    decimal_sep: &str,
+) -> String {
     if decimals == 0 {
         return format_integer_grouped(value, thousands_sep);
     }
@@ -60,7 +66,7 @@ fn format_integer_grouped(value: u128, separator: &str) -> String {
     }
     let mut result = String::with_capacity(digits.len() + digits.len() / 3);
     for (i, ch) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i) % 3 == 0 {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
             result.push_str(separator);
         }
         result.push(ch);
@@ -85,7 +91,7 @@ pub fn format_chart_label(val: f64) -> String {
     let frac = (val.fract().abs() * 100.0).round() as u64;
     if frac == 0 {
         whole_str
-    } else if frac % 10 == 0 {
+    } else if frac.is_multiple_of(10) {
         format!("{whole_str}{decimal_sep}{}", frac / 10)
     } else {
         format!("{whole_str}{decimal_sep}{frac:02}")

@@ -15,7 +15,7 @@ use crate::signer::Signer;
 impl NetworkClient {
     /// Fetch all objects referenced by a transaction (gas payment + PTB inputs).
     /// Used to provide coin metadata for hardware clear signing.
-    async fn fetch_input_objects(&self, tx: &Transaction) -> Result<Vec<Object>> {
+    pub async fn fetch_input_objects(&self, tx: &Transaction) -> Result<Vec<Object>> {
         let Transaction::V1(v1) = tx;
 
         let mut ids: Vec<(ObjectId, Option<u64>)> = Vec::new();
@@ -52,7 +52,7 @@ impl NetworkClient {
     }
 
     /// Dry-run, sign, and execute a built transaction.
-    pub(super) async fn sign_and_execute(
+    pub async fn sign_and_execute(
         &self,
         tx: &Transaction,
         signer: &dyn Signer,

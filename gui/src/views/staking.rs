@@ -113,9 +113,7 @@ impl App {
                     .width(Length::FillPortion(5)),
                     table::column(
                         text("Principal").size(12).color(MUTED),
-                        |r: StakeRow| -> Element<'_, Message> {
-                            text(r.principal).size(13).into()
-                        },
+                        |r: StakeRow| -> Element<'_, Message> { text(r.principal).size(13).into() },
                     )
                     .width(Length::FillPortion(4)),
                     table::column(
@@ -308,7 +306,12 @@ impl App {
         } else {
             v.address.clone()
         };
-        detail = detail.push(text(addr_display).size(12).font(Font::MONOSPACE).color(MUTED));
+        detail = detail.push(
+            text(addr_display)
+                .size(12)
+                .font(Font::MONOSPACE)
+                .color(MUTED),
+        );
 
         detail = detail.push(Space::new().height(4));
 
@@ -320,14 +323,20 @@ impl App {
 
         detail = detail.push(
             row![
-                text("Age").size(12).color(MUTED).width(Length::Fixed(100.0)),
+                text("Age")
+                    .size(12)
+                    .color(MUTED)
+                    .width(Length::Fixed(100.0)),
                 text(age_display).size(13),
             ]
             .spacing(8),
         );
         detail = detail.push(
             row![
-                text("APY").size(12).color(MUTED).width(Length::Fixed(100.0)),
+                text("APY")
+                    .size(12)
+                    .color(MUTED)
+                    .width(Length::Fixed(100.0)),
                 text(apy_display).size(13),
             ]
             .spacing(8),

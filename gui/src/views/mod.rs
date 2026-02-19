@@ -1,4 +1,5 @@
 mod account;
+mod approval;
 mod create;
 #[cfg(feature = "hardware-wallets")]
 mod hardware;

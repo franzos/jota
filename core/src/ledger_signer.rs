@@ -153,6 +153,11 @@ impl Signer for LedgerSigner {
         })
     }
 
+    fn public_key_bytes(&self) -> Result<Vec<u8>> {
+        let pk: &[u8; 32] = self.public_key.as_ref();
+        Ok(pk.to_vec())
+    }
+
     fn address(&self) -> &Address {
         &self.address
     }

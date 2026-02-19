@@ -4,7 +4,8 @@
              (gnu packages xdisorg)
              (gnu packages vulkan)
              (gnu packages rust)
-             (gnu packages linux))
+             (gnu packages linux)
+             (gnu packages node))
 
 (packages->manifest
  (list rust-1.88
@@ -15,4 +16,5 @@
        wayland-protocols
        libxkbcommon
        vulkan-loader
-       eudev))
+       eudev
+       node))

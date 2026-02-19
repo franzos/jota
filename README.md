@@ -59,6 +59,7 @@ On first launch you'll be prompted to create a new wallet or recover from a seed
 | Multi-account | Yes | Yes | Yes |
 | QR code (receive) | - | - | Yes |
 | QR code scan (send) | - | - | TODO |
+| Browser extension bridge | - | - | Yes |
 | Balance chart | - | - | Yes |
 | JSON output (`--json`) | Yes | Yes | - |
 | Faucet (testnet/devnet) | Yes | Yes | Yes |
@@ -106,6 +107,29 @@ iota-wallet-gui --devnet
 ```
 
 The GUI supports wallet creation, recovery, sending/receiving IOTA, transaction history with pagination, staking/unstaking, a balance chart, multi-account switching, and password changes. The GUI requires X11 or Wayland on Linux.
+
+## Browser Extension
+
+A companion browser extension bridges dApps (like the [IOTA Wallet Dashboard](https://wallet-dashboard.iota.org/)) to the desktop wallet via Chrome Native Messaging. The extension implements the [Wallet Standard](https://github.com/wallet-standard/wallet-standard), so any dApp using `@iota/dapp-kit` will discover it automatically.
+
+**Setup:**
+
+1. Download `iota-wallet-extension.zip` from [Releases](https://github.com/franzos/iota-wallet/releases) and unzip it
+2. Open `chrome://extensions`, enable Developer mode, click "Load unpacked", select the unzipped folder
+3. Click the extension icon in the toolbar — copy the Extension ID
+4. In the wallet GUI, go to Settings → Browser Extension, paste the ID, click "Install Native Host"
+
+When a dApp requests signing, the wallet GUI shows an approval modal. If the GUI is already running, Chrome-spawned instances act as headless relays (no duplicate window).
+
+Tested with [CyberPerp](https://mainnet.cyberperp.io/), [IOTA Wallet Dashboard](https://wallet-dashboard.iota.org/), [Virtue Money](https://app.virtue.money/), and others.
+
+**Build from source:**
+
+```bash
+cd extension
+npm install
+node build.mjs
+```
 
 ## Commands
 
@@ -162,10 +186,14 @@ File format: argon2id-derived key + AES-256-GCM. Override the wallet directory w
 
 ## Building
 
-This is a Cargo workspace with three crates: `core` (shared library), `cli`, and `gui`.
+This is a Cargo workspace with three crates: `core` (shared library), `cli`, and `gui`, plus a browser `extension`.
 
 ```bash
+# Rust (CLI + GUI)
 cargo build --release
+
+# Browser extension
+cd extension && npm install && node build.mjs
 ```
 
 Run tests:

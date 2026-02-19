@@ -1,5 +1,8 @@
+use base64ct::Encoding;
+
 use crate::messages::Message;
-use crate::state::{Screen, WalletInfo};
+use crate::native_messaging::NativeResponse;
+use crate::state::{PendingApproval, Screen, WalletInfo};
 use crate::App;
 use iced::widget::qr_code;
 use iced::Task;
@@ -176,7 +179,8 @@ impl App {
                         self.wallet_info = Some(info);
                         self.clear_form();
                         self.screen = Screen::Account;
-                        return self.refresh_dashboard();
+                        let dashboard = self.refresh_dashboard();
+                        return self.replay_buffered_native_requests(dashboard);
                     }
                     Err(e) => self.error_message = Some(e),
                 }
@@ -1173,6 +1177,283 @@ impl App {
                 Task::none()
             }
 
+            // -- Native messaging (browser extension bridge) --
+            Message::NativeRequest(req) => {
+                let info = match &self.wallet_info {
+                    Some(info) => info,
+                    None => {
+                        // Buffer the request — the dApp waits while the user
+                        // unlocks. Replayed from WalletOpened / AccountSwitched.
+                        self.buffered_native_requests.push(req);
+                        return Task::none();
+                    }
+                };
+
+                let origin = req
+                    .params
+                    .get("origin")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+
+                match req.method.as_str() {
+                    "connect" => {
+                        if self.permissions.is_allowed(&info.address_string, &origin) {
+                            // Auto-approve for known origins
+                            match self.build_connect_response(&req.id, info) {
+                                Some(resp) => self.send_native_response(resp),
+                                None => return Task::none(),
+                            }
+                            return Task::none();
+                        }
+
+                        // Unknown origin — show approval modal
+                        if self.pending_approval.is_some() {
+                            self.send_native_response(NativeResponse::err(
+                                req.id,
+                                "BUSY",
+                                "Another request is pending",
+                            ));
+                            return Task::none();
+                        }
+
+                        self.pending_approval = Some(PendingApproval {
+                            request_id: req.id,
+                            method: "connect".into(),
+                            params: req.params,
+                            summary: Some("Wants to connect to your wallet".into()),
+                            origin,
+                        });
+                        Task::none()
+                    }
+                    "signTransaction" | "signAndExecuteTransaction" | "signPersonalMessage" => {
+                        // Reject if another approval is already pending
+                        if self.pending_approval.is_some() {
+                            self.send_native_response(NativeResponse::err(
+                                req.id,
+                                "BUSY",
+                                "Another signing request is pending",
+                            ));
+                            return Task::none();
+                        }
+
+                        // Check chain matches current network (for tx methods)
+                        if req.method != "signPersonalMessage" {
+                            if let Some(chain) = req.params.get("chain").and_then(|c| c.as_str()) {
+                                let expected = format!(
+                                    "iota:{}",
+                                    info.network_config.network.to_string().to_lowercase()
+                                );
+                                if chain != expected {
+                                    self.send_native_response(NativeResponse::err(
+                                        req.id,
+                                        "NETWORK_MISMATCH",
+                                        format!("Wallet is on {expected}, request is for {chain}"),
+                                    ));
+                                    return Task::none();
+                                }
+                            }
+                        }
+
+                        let summary = match req.method.as_str() {
+                            "signTransaction" => Some("Sign a transaction".into()),
+                            "signAndExecuteTransaction" => {
+                                Some("Sign and execute a transaction".into())
+                            }
+                            "signPersonalMessage" => Some("Sign a personal message".into()),
+                            _ => None,
+                        };
+
+                        self.pending_approval = Some(PendingApproval {
+                            request_id: req.id,
+                            method: req.method,
+                            params: req.params,
+                            summary,
+                            origin,
+                        });
+                        Task::none()
+                    }
+                    _ => {
+                        self.send_native_response(NativeResponse::err(
+                            req.id,
+                            "UNKNOWN_METHOD",
+                            format!("Unknown method: {}", req.method),
+                        ));
+                        Task::none()
+                    }
+                }
+            }
+
+            Message::NativeClientConnected(tx) => {
+                self.native_response_tx = Some(tx);
+                Task::none()
+            }
+
+            Message::NativeClientDisconnected => {
+                self.native_response_tx = None;
+                self.pending_approval = None;
+                Task::none()
+            }
+
+            Message::ApproveNativeRequest => {
+                let approval = match self.pending_approval.take() {
+                    Some(a) => a,
+                    None => return Task::none(),
+                };
+                let Some(info) = &self.wallet_info else {
+                    self.send_native_response(NativeResponse::err(
+                        approval.request_id,
+                        "WALLET_LOCKED",
+                        "Wallet is locked",
+                    ));
+                    return Task::none();
+                };
+
+                // Handle connect approval: grant permission and respond with account info
+                if approval.method == "connect" {
+                    self.permissions
+                        .grant(&info.address_string, &approval.origin);
+                    if let Some(resp) = self.build_connect_response(&approval.request_id, info) {
+                        self.send_native_response(resp);
+                    }
+                    return Task::none();
+                }
+
+                let service = info.service.clone();
+                let request_id = approval.request_id.clone();
+                let request_id_err = request_id.clone();
+                let method = approval.method.clone();
+                let params = approval.params.clone();
+
+                Task::perform(
+                    async move {
+                        match method.as_str() {
+                            "signTransaction" => {
+                                let tx_b64 = params
+                                    .get("transaction")
+                                    .and_then(|v| v.as_str())
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!("Missing 'transaction' param")
+                                    })?;
+                                let (bytes, signature) =
+                                    service.sign_raw_transaction(tx_b64).await?;
+                                let result = serde_json::json!({
+                                    "bytes": bytes,
+                                    "signature": signature,
+                                });
+                                Ok((request_id, result))
+                            }
+                            "signAndExecuteTransaction" => {
+                                let tx_b64 = params
+                                    .get("transaction")
+                                    .and_then(|v| v.as_str())
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!("Missing 'transaction' param")
+                                    })?;
+                                let transfer_result = service.sign_and_execute_raw(tx_b64).await?;
+                                let result = serde_json::json!({
+                                    "digest": transfer_result.digest,
+                                    "effects": transfer_result.status,
+                                });
+                                Ok((request_id, result))
+                            }
+                            "signPersonalMessage" => {
+                                let msg_b64 = params
+                                    .get("message")
+                                    .and_then(|v| v.as_str())
+                                    .ok_or_else(|| anyhow::anyhow!("Missing 'message' param"))?;
+                                let msg_bytes = base64ct::Base64::decode_vec(msg_b64)
+                                    .map_err(|e| anyhow::anyhow!("Invalid base64 message: {e}"))?;
+                                let signed = service.sign_message(&msg_bytes)?;
+                                let result = serde_json::json!({
+                                    "bytes": msg_b64,
+                                    "signature": signed.signature,
+                                });
+                                Ok((request_id, result))
+                            }
+                            other => Err(anyhow::anyhow!("Unknown method: {other}")),
+                        }
+                    },
+                    move |r: Result<(String, serde_json::Value), anyhow::Error>| match r {
+                        Ok((id, val)) => Message::NativeSignCompleted(Ok((id, val))),
+                        Err(e) => Message::NativeSignCompleted(Err((
+                            request_id_err,
+                            "SIGNING_FAILED".into(),
+                            e.to_string(),
+                        ))),
+                    },
+                )
+            }
+
+            Message::RejectNativeRequest => {
+                if let Some(approval) = self.pending_approval.take() {
+                    self.send_native_response(NativeResponse::err(
+                        approval.request_id,
+                        "USER_REJECTED",
+                        "User rejected the request",
+                    ));
+                }
+                Task::none()
+            }
+
+            Message::NativeSignCompleted(result) => {
+                match result {
+                    Ok((id, value)) => {
+                        self.send_native_response(NativeResponse::ok(id, value));
+                    }
+                    Err((id, code, message)) => {
+                        self.send_native_response(NativeResponse::err(id, code, message));
+                    }
+                }
+                Task::none()
+            }
+
+            // -- Native host installation --
+            Message::ExtensionIdChanged(v) => {
+                self.extension_id = v;
+                Task::none()
+            }
+
+            Message::InstallNativeHost => {
+                let ext_id = self.extension_id.trim().to_string();
+                if ext_id.is_empty() {
+                    self.error_message = Some("Extension ID is required".into());
+                    return Task::none();
+                }
+                self.error_message = None;
+                self.success_message = None;
+
+                Task::perform(
+                    async move {
+                        crate::native_messaging::install_native_host(&ext_id)
+                            .map_err(|e| e.to_string())
+                    },
+                    Message::NativeHostInstalled,
+                )
+            }
+
+            Message::NativeHostInstalled(result) => {
+                match result {
+                    Ok(paths) => {
+                        let count = paths.len();
+                        self.success_message = Some(format!(
+                            "Native host installed ({count} browser{})",
+                            if count == 1 { "" } else { "s" }
+                        ));
+                    }
+                    Err(e) => self.error_message = Some(format!("Install failed: {e}")),
+                }
+                Task::none()
+            }
+
+            Message::RevokeSitePermission(origin) => {
+                if let Some(info) = &self.wallet_info {
+                    let addr = info.address_string.clone();
+                    self.permissions.revoke(&addr, &origin);
+                }
+                Task::none()
+            }
+
             Message::HistoryLookbackChanged(epochs) => {
                 self.history_lookback = epochs;
                 self.refresh_dashboard()
@@ -1309,6 +1590,7 @@ impl App {
         self.settings_old_password.zeroize();
         self.settings_new_password.zeroize();
         self.settings_new_password_confirm.zeroize();
+        // Keep extension_id across screens — it's a one-time config
     }
 
     pub(crate) fn password_warning(&self) -> Option<&'static str> {
@@ -1483,10 +1765,64 @@ impl App {
         )
     }
 
-    fn resolve_validator_names(
-        stakes: &mut [StakedIotaSummary],
-        validators: &[ValidatorSummary],
-    ) {
+    /// Replay any native requests that arrived while the wallet was locked,
+    /// then append `extra` (typically refresh_dashboard) to the task batch.
+    fn replay_buffered_native_requests(&mut self, extra: Task<Message>) -> Task<Message> {
+        let pending = std::mem::take(&mut self.buffered_native_requests);
+        if pending.is_empty() {
+            return extra;
+        }
+        let mut tasks: Vec<Task<Message>> = pending
+            .into_iter()
+            .map(|req| self.update(Message::NativeRequest(req)))
+            .collect();
+        tasks.push(extra);
+        Task::batch(tasks)
+    }
+
+    fn send_native_response(&self, response: NativeResponse) {
+        if let Some(tx) = &self.native_response_tx {
+            let _ = tx.send(response);
+        }
+    }
+
+    fn build_connect_response(
+        &self,
+        request_id: &str,
+        info: &WalletInfo,
+    ) -> Option<NativeResponse> {
+        let signer = info.service.signer();
+        let pk_bytes = match signer.public_key_bytes() {
+            Ok(b) => b,
+            Err(e) => {
+                self.send_native_response(NativeResponse::err(
+                    request_id.to_string(),
+                    "INTERNAL_ERROR",
+                    e.to_string(),
+                ));
+                return None;
+            }
+        };
+        let chain = format!(
+            "iota:{}",
+            info.network_config.network.to_string().to_lowercase()
+        );
+        let result = serde_json::json!({
+            "accounts": [{
+                "address": info.address_string,
+                "publicKey": base64ct::Base64::encode_string(&pk_bytes),
+                "chains": [chain],
+                "features": [
+                    "iota:signTransaction",
+                    "iota:signAndExecuteTransaction",
+                    "iota:signPersonalMessage",
+                ],
+            }]
+        });
+        Some(NativeResponse::ok(request_id.to_string(), result))
+    }
+
+    fn resolve_validator_names(stakes: &mut [StakedIotaSummary], validators: &[ValidatorSummary]) {
         if validators.is_empty() {
             return;
         }

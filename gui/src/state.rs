@@ -35,6 +35,19 @@ pub(crate) enum SignMode {
     Notarize,
 }
 
+// -- Native messaging approval --
+
+#[derive(Debug, Clone)]
+pub(crate) struct PendingApproval {
+    pub(crate) request_id: String,
+    pub(crate) method: String,
+    pub(crate) params: serde_json::Value,
+    /// Human-readable description for the approval modal.
+    pub(crate) summary: Option<String>,
+    /// The requesting site's origin (e.g. "https://dapp.example.com").
+    pub(crate) origin: String,
+}
+
 // -- Cloneable wallet info extracted after open/create --
 
 #[derive(Clone)]

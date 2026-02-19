@@ -1,0 +1,84 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+    branches: [master]
+
+jobs:
+  extension:
+    name: Build Browser Extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Install dependencies
+        working-directory: extension
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        working-directory: extension
+        run: node build.mjs
+      - name: Package extension
+        run: |
+          cd extension
+          zip -r ../iota-wallet-extension.zip \
+            manifest.json popup.html popup.js icons/ dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iota-wallet-extension
+          path: iota-wallet-extension.zip
+
+  rust:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build CLI
+        run: cargo build --release -p iota-wallet
+      - name: Build GUI
+        run: cargo build --release -p iota-wallet-gui
+      - name: Package
+        run: |
+          tar czf iota-wallet-${{ matrix.target }}.tar.gz \
+            -C target/release iota-wallet iota-wallet-gui
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iota-wallet-${{ matrix.target }}
+          path: iota-wallet-${{ matrix.target }}.tar.gz
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [rust, extension]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/iota-wallet-x86_64-unknown-linux-gnu/*.tar.gz
+            artifacts/iota-wallet-aarch64-apple-darwin/*.tar.gz
+            artifacts/iota-wallet-x86_64-apple-darwin/*.tar.gz
+            artifacts/iota-wallet-extension/*.zip
