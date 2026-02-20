@@ -45,6 +45,29 @@ impl App {
         if let Some(msg) = &self.success_message {
             col = col.push(text(msg.as_str()).size(13).color(styles::ACCENT));
         }
+        if let Some(addr) = &self.save_contact_offer {
+            let addr_short = if addr.len() > 20 {
+                format!("{}...{}", &addr[..10], &addr[addr.len() - 8..])
+            } else {
+                addr.clone()
+            };
+            let offer = row![
+                text(format!("Save {addr_short} to contacts?"))
+                    .size(12)
+                    .color(MUTED),
+                button(text("Save").size(11))
+                    .padding([4, 10])
+                    .style(styles::btn_secondary)
+                    .on_press(Message::SaveContactOffer),
+                button(text("Dismiss").size(11))
+                    .padding([4, 10])
+                    .style(styles::btn_ghost)
+                    .on_press(Message::DismissContactOffer),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center);
+            col = col.push(offer);
+        }
         if let Some(err) = &self.error_message {
             let mut error_row = row![text(err.as_str()).size(13).color(styles::DANGER)]
                 .spacing(8)

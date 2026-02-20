@@ -1,7 +1,7 @@
 use crate::messages::Message;
 use crate::{styles, App, TokenOption, MUTED};
 use iced::widget::{button, column, container, pick_list, row, text, text_input, Space};
-use iced::{Element, Fill, Length};
+use iced::{Element, Fill, Font, Length};
 use jota_core::display::format_balance;
 
 impl App {
@@ -82,6 +82,51 @@ impl App {
         if let Some(hint) = resolved_hint {
             form = form.push(hint);
         }
+
+        // Contact suggestions
+        if !self.recipient.is_empty() && !self.contacts.is_empty() {
+            let query = self.recipient.to_lowercase();
+            let matches: Vec<_> = self
+                .contacts
+                .iter()
+                .filter(|c| {
+                    c.name.to_lowercase().contains(&query)
+                        || c.address.to_lowercase().contains(&query)
+                        || c.iota_name
+                            .as_ref()
+                            .map(|n| n.to_lowercase().contains(&query))
+                            .unwrap_or(false)
+                })
+                .take(5)
+                .collect();
+            if !matches.is_empty() {
+                let mut suggestions = column![].spacing(2);
+                for c in matches {
+                    let addr_short = if c.address.len() > 16 {
+                        format!(
+                            "{}...{}",
+                            &c.address[..8],
+                            &c.address[c.address.len() - 6..]
+                        )
+                    } else {
+                        c.address.clone()
+                    };
+                    let label = row![
+                        text(&c.name).size(12),
+                        text(addr_short).size(11).font(Font::MONOSPACE).color(MUTED),
+                    ]
+                    .spacing(8);
+                    let btn = button(label)
+                        .padding([4, 8])
+                        .width(Fill)
+                        .style(styles::btn_ghost)
+                        .on_press(Message::SelectContact(c.address.clone()));
+                    suggestions = suggestions.push(btn);
+                }
+                form = form.push(suggestions);
+            }
+        }
+
         form = form
             .push(Space::new().height(4))
             .push(text("Amount").size(12).color(MUTED))

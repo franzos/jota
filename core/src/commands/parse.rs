@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use iota_sdk::types::{Digest, ObjectId};
 
-use super::Command;
+use super::{Command, ContactSubcommand};
 use crate::display;
 use crate::network::TransactionFilter;
 use crate::recipient::Recipient;
@@ -244,6 +244,67 @@ impl Command {
                     signature,
                     public_key,
                 })
+            }
+
+            "contacts" | "contact" => {
+                let subcmd = arg1.map(|s| s.to_lowercase());
+                match subcmd.as_deref() {
+                    Some("add") => {
+                        // Re-split: contacts add <name> <address>
+                        let mut parts = input.splitn(4, char::is_whitespace);
+                        let _cmd = parts.next();
+                        let _sub = parts.next();
+                        let name = parts
+                            .next()
+                            .map(|s| s.trim())
+                            .filter(|s| !s.is_empty())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "Missing name. Usage: contacts add <name> <address|name.iota>"
+                                )
+                            })?
+                            .to_string();
+                        let address = parts
+                            .next()
+                            .map(|s| s.trim())
+                            .filter(|s| !s.is_empty())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "Missing address. Usage: contacts add <name> <address|name.iota>"
+                                )
+                            })?
+                            .to_string();
+                        Ok(Command::Contact {
+                            subcommand: ContactSubcommand::Add { name, address },
+                        })
+                    }
+                    Some("remove") | Some("rm") | Some("delete") => {
+                        let name = arg2
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("Missing name. Usage: contacts remove <name>")
+                            })?
+                            .to_string();
+                        Ok(Command::Contact {
+                            subcommand: ContactSubcommand::Remove { name },
+                        })
+                    }
+                    Some("export") => Ok(Command::Contact {
+                        subcommand: ContactSubcommand::Export,
+                    }),
+                    Some("import") => {
+                        let file = arg2
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("Missing file. Usage: contacts import <file>")
+                            })?
+                            .to_string();
+                        Ok(Command::Contact {
+                            subcommand: ContactSubcommand::Import { file },
+                        })
+                    }
+                    _ => Ok(Command::Contact {
+                        subcommand: ContactSubcommand::List,
+                    }),
+                }
             }
 
             "password" | "passwd" => Ok(Command::Password),

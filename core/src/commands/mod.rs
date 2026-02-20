@@ -9,6 +9,21 @@ use iota_sdk::types::{Digest, ObjectId};
 
 use crate::display;
 
+/// Subcommands for the `contacts` command.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ContactSubcommand {
+    /// List all contacts
+    List,
+    /// Add a contact: contacts add <name> <address|name.iota>
+    Add { name: String, address: String },
+    /// Remove a contact: contacts remove <name>
+    Remove { name: String },
+    /// Export contacts as JSON
+    Export,
+    /// Import contacts from a JSON file
+    Import { file: String },
+}
+
 /// UTF-8 safe string truncation for confirmation prompts.
 fn truncate_preview(s: &str, max_chars: usize) -> String {
     if s.chars().count() <= max_chars {
@@ -78,6 +93,8 @@ pub enum Command {
     },
     /// Notarize a message on-chain: notarize <message>
     Notarize { message: String },
+    /// Address book management
+    Contact { subcommand: ContactSubcommand },
     /// Change wallet password
     Password,
     /// Reconnect the hardware wallet device

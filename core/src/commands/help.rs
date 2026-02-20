@@ -49,6 +49,9 @@ pub fn help_text(command: Option<&str>) -> String {
         Some("account") | Some("acc") => {
             "account [index]\n  Show current account and known accounts, or switch.\n  Example: account 3\n  Each account derives a unique address from the same seed.\n  Alias: acc".to_string()
         }
+        Some("contacts") | Some("contact") => {
+            "contacts [add|remove|export|import]\n  Manage your address book.\n  contacts              List all contacts\n  contacts add <name> <address|name.iota>   Add a contact\n  contacts remove <name>                    Remove a contact\n  contacts export                           Print contacts as JSON\n  contacts import <file>                    Import contacts from JSON file\n  Alias: contact".to_string()
+        }
         Some("password") | Some("passwd") => {
             "password\n  Change the wallet's encryption password.\n  Alias: passwd".to_string()
         }
@@ -85,6 +88,7 @@ pub fn help_text(command: Option<&str>) -> String {
              \x20 send_nft         Transfer an NFT to a recipient\n\
              \x20 status           Show network status\n\
              \x20 faucet           Request testnet/devnet tokens\n\
+             \x20 contacts          Manage address book\n\
              \x20 sign_message      Sign a message with your key\n\
              \x20 verify            Verify a signed message\n\
              \x20 notarize          Notarize a message on-chain\n\

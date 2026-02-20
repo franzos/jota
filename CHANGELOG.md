@@ -1,3 +1,8 @@
+## [0.2.2] - 2026-02-20
+
+### Added
+- Address book: save, edit, and delete contacts (CLI + GUI)
+
 ## [0.2.1] - 2026-02-20
 
 ### Fixed

@@ -14,7 +14,7 @@ use jota_core::network::{
 };
 use jota_core::service::WalletService;
 use jota_core::wallet::{Network, NetworkConfig, Wallet};
-use jota_core::{list_wallets, validate_wallet_name};
+use jota_core::{list_wallets, validate_wallet_name, Contact, ContactStore};
 use jota_core::{verify_message, ObjectId, Recipient, SignedMessage};
 use std::sync::Arc;
 use zeroize::{Zeroize, Zeroizing};
@@ -42,9 +42,13 @@ impl App {
                     self.token_meta.clear();
                     self.session_password.zeroize();
                 }
+                let load_contacts = screen == Screen::Contacts || screen == Screen::Send;
                 let load_stakes = screen == Screen::Staking;
                 let load_nfts = screen == Screen::Nfts;
                 self.screen = screen;
+                if load_contacts {
+                    return self.load_contacts();
+                }
                 if load_stakes {
                     return Task::batch([self.load_stakes(), self.load_validators()]);
                 }
@@ -641,6 +645,25 @@ impl App {
                 match result {
                     Ok(digest) => {
                         self.success_message = Some(format!("Sent! Digest: {digest}"));
+
+                        // Check if the recipient is a known contact; offer to save if not
+                        let sent_addr = self
+                            .resolved_recipient
+                            .as_ref()
+                            .and_then(|r| r.as_ref().ok())
+                            .cloned()
+                            .unwrap_or_else(|| self.recipient.trim().to_lowercase());
+                        self.save_contact_offer = None;
+                        if sent_addr.starts_with("0x") {
+                            let known = self
+                                .contacts
+                                .iter()
+                                .any(|c| c.address.eq_ignore_ascii_case(&sent_addr));
+                            if !known {
+                                self.save_contact_offer = Some(sent_addr);
+                            }
+                        }
+
                         self.recipient.clear();
                         self.amount.clear();
                         self.screen = Screen::Account;
@@ -697,6 +720,152 @@ impl App {
                 };
                 let url = format!("https://explorer.iota.org/address/{addr}{query}");
                 let _ = open::that(&url);
+                Task::none()
+            }
+
+            // -- Contacts --
+            Message::ContactsLoaded(result) => {
+                match result {
+                    Ok(c) => self.contacts = c,
+                    Err(e) => self.error_message = Some(e),
+                }
+                Task::none()
+            }
+            Message::OpenContactForm => {
+                self.contact_form_visible = true;
+                self.contact_form_name.clear();
+                self.contact_form_address.clear();
+                self.contact_form_editing = None;
+                self.error_message = None;
+                Task::none()
+            }
+            Message::CloseContactForm => {
+                self.contact_form_visible = false;
+                self.contact_form_editing = None;
+                self.error_message = None;
+                Task::none()
+            }
+            Message::ContactNameChanged(v) => {
+                self.contact_form_name = v;
+                Task::none()
+            }
+            Message::ContactAddressChanged(v) => {
+                self.contact_form_address = v;
+                Task::none()
+            }
+            Message::EditContact(idx) => {
+                if let Some(c) = self.contacts.get(idx) {
+                    self.contact_form_name = c.name.clone();
+                    self.contact_form_address = c.iota_name.clone().unwrap_or(c.address.clone());
+                    self.contact_form_editing = Some(idx);
+                    self.contact_form_visible = true;
+                    self.error_message = None;
+                }
+                Task::none()
+            }
+            Message::SaveContact => {
+                let name = self.contact_form_name.trim().to_string();
+                let address = self.contact_form_address.trim().to_string();
+                if name.is_empty() || address.is_empty() {
+                    self.error_message = Some("Name and address are required".into());
+                    return Task::none();
+                }
+                let editing = self.contact_form_editing;
+                let service = self.wallet_info.as_ref().map(|i| i.service.clone());
+
+                Task::perform(
+                    async move {
+                        let mut store = ContactStore::open()?;
+
+                        // If editing, remove the old entry first
+                        if let Some(idx) = editing {
+                            if let Some(old) = store.list().get(idx) {
+                                let old_name = old.name.clone();
+                                store.remove(&old_name)?;
+                            }
+                        }
+
+                        // Resolve .iota names if a service is available
+                        let (addr, iota_name) = if address.ends_with(".iota") {
+                            if let Some(svc) = service {
+                                let r = Recipient::Name(address.to_lowercase());
+                                let resolved = svc.resolve_recipient(&r).await?;
+                                (resolved.address.to_string(), Some(address))
+                            } else {
+                                anyhow::bail!(
+                                    "Cannot resolve .iota name without a wallet connection."
+                                );
+                            }
+                        } else {
+                            (address, None)
+                        };
+
+                        store.add(&name, &addr, iota_name.as_deref())?;
+                        Ok(())
+                    },
+                    |r: Result<(), anyhow::Error>| {
+                        Message::ContactSaved(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+            Message::ContactSaved(result) => {
+                match result {
+                    Ok(()) => {
+                        self.contact_form_visible = false;
+                        self.contact_form_editing = None;
+                        self.success_message = Some("Contact saved".into());
+                        return self.load_contacts();
+                    }
+                    Err(e) => self.error_message = Some(e),
+                }
+                Task::none()
+            }
+            Message::DeleteContact(idx) => {
+                let name = match self.contacts.get(idx) {
+                    Some(c) => c.name.clone(),
+                    None => return Task::none(),
+                };
+
+                Task::perform(
+                    async move {
+                        let mut store = ContactStore::open()?;
+                        store.remove(&name)?;
+                        Ok(store.list().to_vec())
+                    },
+                    |r: Result<Vec<Contact>, anyhow::Error>| {
+                        Message::ContactDeleted(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+            Message::ContactDeleted(result) => {
+                match result {
+                    Ok(contacts) => {
+                        self.contacts = contacts;
+                        self.success_message = Some("Contact deleted".into());
+                    }
+                    Err(e) => self.error_message = Some(e),
+                }
+                Task::none()
+            }
+            Message::SelectContact(address) => {
+                // Populate recipient field — if already on Send, just fill it;
+                // otherwise this message comes from the contact list button.
+                self.recipient = address;
+                self.resolved_recipient = None;
+                Task::none()
+            }
+            Message::SaveContactOffer => {
+                if let Some(addr) = self.save_contact_offer.take() {
+                    self.contact_form_address = addr;
+                    self.contact_form_name.clear();
+                    self.contact_form_editing = None;
+                    self.contact_form_visible = true;
+                    self.screen = Screen::Contacts;
+                }
+                Task::none()
+            }
+            Message::DismissContactOffer => {
+                self.save_contact_offer = None;
                 Task::none()
             }
 
@@ -1587,6 +1756,11 @@ impl App {
         self.notarize_result = None;
         self.send_nft_object_id = None;
         self.send_nft_recipient.clear();
+        self.contact_form_visible = false;
+        self.contact_form_name.clear();
+        self.contact_form_address.clear();
+        self.contact_form_editing = None;
+        self.save_contact_offer = None;
         self.settings_old_password.zeroize();
         self.settings_new_password.zeroize();
         self.settings_new_password_confirm.zeroize();
@@ -1761,6 +1935,18 @@ impl App {
             async move { service.get_validators().await },
             |r: Result<Vec<ValidatorSummary>, _>| {
                 Message::ValidatorsLoaded(r.map_err(|e| e.to_string()))
+            },
+        )
+    }
+
+    fn load_contacts(&mut self) -> Task<Message> {
+        Task::perform(
+            async move {
+                let store = ContactStore::open()?;
+                Ok(store.list().to_vec())
+            },
+            |r: Result<Vec<Contact>, anyhow::Error>| {
+                Message::ContactsLoaded(r.map_err(|e| e.to_string()))
             },
         )
     }

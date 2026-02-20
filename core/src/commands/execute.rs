@@ -1,8 +1,9 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 
 use super::help::help_text;
-use super::Command;
+use super::{Command, ContactSubcommand};
 use crate::cache::TransactionCache;
+use crate::contacts::ContactStore;
 use crate::display;
 use crate::network::NetworkClient;
 use crate::recipient::ResolvedRecipient;
@@ -554,6 +555,81 @@ impl Command {
                         "NFT sent!\n  Digest: {}\n  Status: {}\n  Object: {} -> {}",
                         result.digest, result.status, object_id, res,
                     ))
+                }
+            }
+
+            Command::Contact { subcommand } => {
+                let mut store = ContactStore::open()?;
+                match subcommand {
+                    ContactSubcommand::List => {
+                        let contacts = store.list();
+                        if contacts.is_empty() {
+                            if json_output {
+                                Ok("[]".to_string())
+                            } else {
+                                Ok(
+                                    "No contacts yet. Add one with: contacts add <name> <address>"
+                                        .to_string(),
+                                )
+                            }
+                        } else if json_output {
+                            Ok(store.export()?)
+                        } else {
+                            let mut out = String::new();
+                            for c in contacts {
+                                let name_part = if let Some(ref iota_name) = c.iota_name {
+                                    format!("{} ({})", c.name, iota_name)
+                                } else {
+                                    c.name.clone()
+                                };
+                                out.push_str(&format!("  {:<20} {}\n", name_part, c.address));
+                            }
+                            Ok(out.trim_end().to_string())
+                        }
+                    }
+                    ContactSubcommand::Add { name, address } => {
+                        // If address looks like an .iota name, store it as iota_name
+                        // and resolve the actual address later (for now store as-is).
+                        let (addr, iota_name) = if address.ends_with(".iota") {
+                            // For CLI, we need a resolved address. Try to resolve.
+                            let r = crate::recipient::Recipient::parse(address)?;
+                            match resolved {
+                                Some(res) => (res.address.to_string(), Some(address.clone())),
+                                None => {
+                                    // Try resolving via the service
+                                    let res = service.resolve_recipient(&r).await?;
+                                    (res.address.to_string(), Some(address.clone()))
+                                }
+                            }
+                        } else {
+                            (address.clone(), None)
+                        };
+                        store.add(name, &addr, iota_name.as_deref())?;
+                        if json_output {
+                            Ok(serde_json::json!({"status": "ok", "name": name}).to_string())
+                        } else {
+                            Ok(format!("Contact '{name}' added."))
+                        }
+                    }
+                    ContactSubcommand::Remove { name } => {
+                        store.remove(name)?;
+                        if json_output {
+                            Ok(serde_json::json!({"status": "ok", "name": name}).to_string())
+                        } else {
+                            Ok(format!("Contact '{name}' removed."))
+                        }
+                    }
+                    ContactSubcommand::Export => Ok(store.export()?),
+                    ContactSubcommand::Import { file } => {
+                        let json =
+                            std::fs::read_to_string(file).context("Failed to read import file")?;
+                        let added = store.import(&json)?;
+                        if json_output {
+                            Ok(serde_json::json!({"status": "ok", "added": added}).to_string())
+                        } else {
+                            Ok(format!("{added} contact(s) imported."))
+                        }
+                    }
                 }
             }
 

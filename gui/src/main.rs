@@ -93,6 +93,14 @@ struct App {
     // Name resolution
     resolved_recipient: Option<Result<String, String>>,
 
+    // Contacts
+    contacts: Vec<jota_core::Contact>,
+    contact_form_visible: bool,
+    contact_form_name: String,
+    contact_form_address: String,
+    contact_form_editing: Option<usize>,
+    save_contact_offer: Option<String>, // address offered for saving after send
+
     // Staking
     stakes: Vec<StakedIotaSummary>,
     validators: Vec<ValidatorSummary>,
@@ -271,6 +279,12 @@ impl App {
             history_page: 0,
             history_total: 0,
             resolved_recipient: None,
+            contacts: Vec::new(),
+            contact_form_visible: false,
+            contact_form_name: String::new(),
+            contact_form_address: String::new(),
+            contact_form_editing: None,
+            save_contact_offer: None,
             stakes: Vec::new(),
             validators: Vec::new(),
             validator_address: String::new(),
@@ -391,6 +405,7 @@ impl App {
             | Screen::Send
             | Screen::Receive
             | Screen::History
+            | Screen::Contacts
             | Screen::Staking
             | Screen::Nfts
             | Screen::Sign
@@ -406,6 +421,7 @@ impl App {
             Screen::Send => self.view_send(),
             Screen::Receive => self.view_receive(),
             Screen::History => self.view_history(),
+            Screen::Contacts => self.view_contacts(),
             Screen::Staking => self.view_staking(),
             Screen::Nfts => self.view_nfts(),
             Screen::Sign => self.view_sign(),
@@ -478,6 +494,33 @@ impl App {
             }
         }
 
+        // Layer contact form modal when visible
+        if self.screen == Screen::Contacts && self.contact_form_visible {
+            if let Some(overlay) = self.view_contact_modal() {
+                let backdrop = mouse_area(
+                    container(opaque(overlay))
+                        .center_x(Fill)
+                        .center_y(Fill)
+                        .width(Fill)
+                        .height(Fill)
+                        .style(|_theme| container::Style {
+                            background: Some(Background::Color(Color::from_rgba(
+                                0.0, 0.0, 0.0, 0.55,
+                            ))),
+                            ..Default::default()
+                        }),
+                )
+                .on_press(Message::CloseContactForm);
+
+                return Stack::new()
+                    .push(main_layout)
+                    .push(backdrop)
+                    .width(Fill)
+                    .height(Fill)
+                    .into();
+            }
+        }
+
         // Layer native messaging approval modal when pending
         if let Some(overlay) = self.view_approval_modal() {
             let backdrop = mouse_area(
@@ -527,6 +570,7 @@ impl App {
             nav_btn("↗", "Send", Screen::Send),
             nav_btn("↙", "Receive", Screen::Receive),
             nav_btn("≡", "History", Screen::History),
+            nav_btn("☆", "Contacts", Screen::Contacts),
             nav_btn("◆", "Staking", Screen::Staking),
             nav_btn("▣", "NFTs", Screen::Nfts),
             nav_btn("✎", "Sign", Screen::Sign),

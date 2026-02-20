@@ -85,6 +85,21 @@ pub(crate) enum Message {
     // Explorer
     OpenExplorerAddress(String),
 
+    // Contacts
+    ContactsLoaded(Result<Vec<jota_core::Contact>, String>),
+    OpenContactForm,
+    CloseContactForm,
+    ContactNameChanged(String),
+    ContactAddressChanged(String),
+    SaveContact,
+    DeleteContact(usize),
+    EditContact(usize),
+    ContactSaved(Result<(), String>),
+    ContactDeleted(Result<Vec<jota_core::Contact>, String>),
+    SelectContact(String),
+    SaveContactOffer,
+    DismissContactOffer,
+
     // Staking
     StakeAmountChanged(String),
     ConfirmStake,

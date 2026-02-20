@@ -22,6 +22,7 @@ pub(crate) enum Screen {
     Send,
     Receive,
     History,
+    Contacts,
     Staking,
     Nfts,
     Sign,
