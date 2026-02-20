@@ -29,6 +29,13 @@ curl -sL https://github.com/franzos/jota/releases/latest/download/jota-x86_64-ap
 sudo mv jota /usr/local/bin/
 ```
 
+**Homebrew:**
+
+```bash
+brew tap franzos/tap
+brew install jota
+```
+
 ## Quick start
 
 ```bash
