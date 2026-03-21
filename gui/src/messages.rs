@@ -100,6 +100,92 @@ pub(crate) enum Message {
     SaveContactOffer,
     DismissContactOffer,
 
+    // Multisig
+    MultisigLoaded(
+        Result<
+            (
+                Vec<jota_core::multisig::MultisigConfig>,
+                Vec<jota_core::multisig::TransactionProposal>,
+            ),
+            String,
+        >,
+    ),
+    RefreshMultisig,
+    MultisigSelectConfig(usize),
+    MultisigCloseDetail,
+    MultisigSelectProposal(usize),
+    MultisigCloseProposal,
+    MultisigRemoveConfig(String),
+    MultisigConfigRemoved(Result<(), String>),
+    MultisigSubmitProposal(String),
+    MultisigSubmitCompleted(Result<String, String>),
+    MultisigCancelProposal(String),
+    MultisigProposalCancelled(Result<(), String>),
+
+    // Multisig context switching
+    MultisigActivate(usize),
+    MultisigDeactivate,
+
+    // Multisig Import
+    MultisigImportFile,
+    MultisigImportPathChanged(String),
+    MultisigImportConfirm,
+    MultisigCloseImport,
+    MultisigImportCompleted(Result<String, String>),
+
+    // Multisig Create Wizard
+    MultisigOpenCreate,
+    MultisigCloseCreate,
+    MultisigCreateNameChanged(String),
+    MultisigCreateNumParticipantsChanged(String),
+    MultisigCreateThresholdChanged(String),
+    MultisigCreateMyWeightChanged(String),
+    MultisigCreateMyLabelChanged(String),
+    MultisigCreateMemberLabelChanged(usize, String),
+    MultisigCreateMemberKeyChanged(usize, String),
+    MultisigCreateMemberWeightChanged(usize, String),
+    MultisigCreateMemberSchemeChanged(usize, String),
+    MultisigCreateNextStep,
+    MultisigCreatePrevStep,
+    MultisigCreateConfirm,
+    MultisigCreateCompleted(Result<String, String>),
+    MultisigCopyPublicKey,
+    MultisigCopyAddress(String),
+    MultisigExportConfig(usize),
+    MultisigExportSaved(Result<String, String>),
+
+    // Multisig Send
+    MultisigOpenSend(usize),
+    MultisigCloseSend,
+    MultisigSendRecipientChanged(String),
+    MultisigSendAmountChanged(String),
+    MultisigSendConfirm,
+    MultisigSendCompleted(Result<String, String>),
+    MultisigExportProposal(String),
+    MultisigProposalExported(Result<String, String>),
+
+    // Multisig Sign External
+    MultisigSignExternalOpen,
+    MultisigSignExternalPathChanged(String),
+    MultisigSignExternalLoadFile,
+    MultisigSignExternalReviewed,
+    MultisigSignExternalCompleted(Result<String, String>),
+    MultisigSignExternalClose,
+
+    // Multisig Import Signature
+    MultisigImportSignature(String),
+    MultisigImportSigPathChanged(String),
+    MultisigImportSigConfirm,
+    MultisigSignatureImported(Result<String, String>),
+
+    // Multisig Browse (native file dialogs)
+    MultisigBrowseImport,
+    MultisigBrowseImportResult(Result<String, String>),
+    MultisigBrowseSignExternal,
+    MultisigBrowseSignExternalResult(Result<String, String>),
+    MultisigBrowseImportSig,
+    MultisigBrowseImportSigResult(Result<String, String>),
+
     // Staking
     StakeAmountChanged(String),
     ConfirmStake,

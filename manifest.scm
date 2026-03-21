@@ -5,7 +5,10 @@
              (gnu packages vulkan)
              (gnu packages rust)
              (gnu packages linux)
-             (gnu packages node))
+             (gnu packages node)
+             (gnu packages gtk)
+             (gnu packages glib)
+             (gnu packages tls))
 
 (packages->manifest
  (list rust-1.88
@@ -17,4 +20,7 @@
        libxkbcommon
        vulkan-loader
        eudev
-       node))
+       node
+       gtk+
+       glib
+       openssl))

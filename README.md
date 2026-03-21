@@ -53,6 +53,7 @@ On first launch you'll be prompted to create a new wallet or recover from a seed
 | Sign & verify messages | Yes | Yes | Yes |
 | On-chain notarization | Yes | Yes | Yes |
 | Multi-account | Yes | Yes | Yes |
+| Multi-signature | Yes | Yes | Yes |
 | QR code (receive) | - | - | Yes |
 | QR code scan (send) | - | - | TODO |
 | Browser extension bridge | - | - | Yes |
@@ -148,10 +149,33 @@ node build.mjs
 | `account [index]` | `acc` | Show current account or switch (e.g. `account 3`) |
 | `seed` | | Display seed phrase (requires confirmation) |
 | `password` | `passwd` | Change wallet encryption password |
+| `multisig <subcommand>` | `ms` | Multi-signature operations (see below) |
 | `help [cmd]` | | Show help |
 | `exit` | `quit`, `q` | Exit the wallet |
 
 Amounts are in IOTA (e.g. `1.5` for 1.5 IOTA). Tab completion is available in the REPL. All commands support `--json` output.
+
+### Multi-signature
+
+IOTA's native multi-sig uses a weighted threshold scheme: each signer has a public key with a weight, and the address has a threshold. A transaction is valid when collected signatures' weights meet or exceed the threshold. Up to 10 participants per address, with mixed key schemes (Ed25519, Secp256k1, Secp256r1).
+
+Participants share public keys and proposals via self-contained JSON files (`.jota-multisig`, `.jota-proposal`, `.jota-sig`) — no server required. Transaction contents are always decoded from the raw bytes, never from advisory metadata.
+
+| Subcommand | Description |
+|------------|-------------|
+| `multisig create <name>` | Interactive wizard to set up a new multisig address |
+| `multisig import <file>` | Import a `.jota-multisig` address definition |
+| `multisig export <name>` | Export a `.jota-multisig` for sharing with participants |
+| `multisig list` | List configured multisig addresses |
+| `multisig show <name>` | Show participants, weights, threshold, and on-chain balance |
+| `multisig remove <name>` | Remove a multisig config (local only) |
+| `multisig send <name> <recipient> <amount>` | Propose a transfer, exports `.jota-proposal` |
+| `multisig sign <file>` | Review and sign a `.jota-proposal`, exports `.jota-sig` |
+| `multisig add-sig <id> <file>` | Import a `.jota-sig` or updated `.jota-proposal` |
+| `multisig submit <id>` | Combine signatures and execute on-chain |
+| `multisig proposals [name]` | List pending proposals |
+| `multisig proposal <id>` | Show proposal details and signature status |
+| `multisig cancel <id>` | Mark a proposal as cancelled locally |
 
 ## Network
 
@@ -175,7 +199,11 @@ All persistent data lives in the XDG data directory (`~/.local/share/jota/` on L
 ├── default.wallet    # encrypted (mode 0600)
 ├── mywallet.wallet
 ├── permissions.json  # dApp origin permissions
-└── transactions.db   # SQLite cache (mode 0600)
+├── transactions.db   # SQLite cache (mode 0600)
+└── multisig/
+    ├── company-funds.json              # multisig config (plain JSON)
+    └── proposals/
+        └── a3f7b2c1...full-hex.json   # transaction proposal
 
 $XDG_RUNTIME_DIR/jota/
 └── gui.sock          # single-instance relay

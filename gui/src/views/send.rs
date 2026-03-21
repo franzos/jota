@@ -63,7 +63,12 @@ impl App {
             .on_input(Message::AmountChanged)
             .on_submit(Message::ConfirmSend);
 
-        let mut send = button(text("Send").size(14))
+        let send_label = if self.is_multisig_active() {
+            "Create Proposal"
+        } else {
+            "Send"
+        };
+        let mut send = button(text(send_label).size(14))
             .padding([10, 24])
             .style(styles::btn_primary);
         if self.loading == 0 && !self.recipient.is_empty() && !self.amount.is_empty() {
@@ -126,6 +131,14 @@ impl App {
             .push(amount)
             .push(Space::new().height(12))
             .push(send);
+
+        if self.is_multisig_active() {
+            form = form.push(
+                text("This will create a proposal requiring co-signer approval.")
+                    .size(11)
+                    .color(MUTED),
+            );
+        }
 
         let header = row![title, Space::new().width(Fill)].align_y(iced::Alignment::Center);
 

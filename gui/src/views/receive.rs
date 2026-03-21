@@ -11,18 +11,22 @@ impl App {
 
         let title = text("Receive IOTA").size(24);
 
-        let addr_container = container(text(&info.address_string).size(14).font(Font::MONOSPACE))
-            .padding(15)
-            .width(Fill)
-            .style(|_theme| container::Style {
-                background: Some(iced::Background::Color(BG)),
-                border: iced::Border {
-                    color: BORDER,
-                    width: 1.0,
-                    radius: 8.0.into(),
-                },
-                ..Default::default()
-            });
+        let addr_container = container(
+            text(self.active_address_string())
+                .size(14)
+                .font(Font::MONOSPACE),
+        )
+        .padding(15)
+        .width(Fill)
+        .style(|_theme| container::Style {
+            background: Some(iced::Background::Color(BG)),
+            border: iced::Border {
+                color: BORDER,
+                width: 1.0,
+                radius: 8.0.into(),
+            },
+            ..Default::default()
+        });
 
         let copy = button(text("Copy Address").size(14))
             .padding([10, 20])

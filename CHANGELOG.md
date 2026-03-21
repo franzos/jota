@@ -1,3 +1,15 @@
+## [0.2.5] - 2026-03-21
+
+### Added
+- Multi-signature support (CLI, REPL, GUI): weighted threshold scheme with up to 10 participants and mixed key schemes
+- Shareable file formats for multisig coordination: `.jota-multisig` (address definition), `.jota-proposal` (unsigned transaction), `.jota-sig` (single signature)
+- Interactive multisig create wizard, proposal signing with decoded transaction review, signature collection and on-chain submission
+- Dry-run validation before submission; stale proposals detected automatically
+- GUI: multisig address list, proposal dashboard, create wizard, context switching to send from multisig addresses
+
+### Fixed
+- CI: added GTK3 dev libraries to Linux build workflows (required by file dialog)
+
 ## [0.2.4] - 2026-03-01
 
 ### Fixed

@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use iota_sdk::types::{Digest, ObjectId};
 
-use super::{Command, ContactSubcommand};
+use super::{Command, ContactSubcommand, MultisigSubcommand};
 use crate::display;
 use crate::network::TransactionFilter;
 use crate::recipient::Recipient;
@@ -304,6 +304,179 @@ impl Command {
                     _ => Ok(Command::Contact {
                         subcommand: ContactSubcommand::List,
                     }),
+                }
+            }
+
+            "multisig" | "ms" => {
+                // Re-split to get all parts for multisig subcommands
+                let rest = input
+                    .split_once(char::is_whitespace)
+                    .map(|x| x.1)
+                    .unwrap_or("")
+                    .trim();
+
+                let mut sub_parts = rest.splitn(4, char::is_whitespace);
+                let subcmd = sub_parts.next().unwrap_or("").to_lowercase();
+                let sub_arg1 = sub_parts.next().map(|s| s.trim());
+                let sub_arg2 = sub_parts.next().map(|s| s.trim());
+                let sub_arg3 = sub_parts.next().map(|s| s.trim());
+
+                match subcmd.as_str() {
+                    "list" | "ls" | "" => Ok(Command::Multisig {
+                        subcommand: MultisigSubcommand::List,
+                    }),
+                    "create" | "new" => {
+                        let name = sub_arg1
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "Missing name. Usage: multisig create <name>"
+                                )
+                            })?
+                            .to_string();
+                        Ok(Command::Multisig {
+                            subcommand: MultisigSubcommand::Create { name },
+                        })
+                    }
+                    "show" => {
+                        let name = sub_arg1
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("Missing name. Usage: multisig show <name>")
+                            })?
+                            .to_string();
+                        Ok(Command::Multisig {
+                            subcommand: MultisigSubcommand::Show { name },
+                        })
+                    }
+                    "import" => {
+                        let file = sub_arg1
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("Missing file. Usage: multisig import <file>")
+                            })?
+                            .to_string();
+                        Ok(Command::Multisig {
+                            subcommand: MultisigSubcommand::Import { file },
+                        })
+                    }
+                    "export" => {
+                        let name = sub_arg1
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("Missing name. Usage: multisig export <name>")
+                            })?
+                            .to_string();
+                        Ok(Command::Multisig {
+                            subcommand: MultisigSubcommand::Export { name },
+                        })
+                    }
+                    "remove" | "rm" => {
+                        let name = sub_arg1
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("Missing name. Usage: multisig remove <name>")
+                            })?
+                            .to_string();
+                        Ok(Command::Multisig {
+                            subcommand: MultisigSubcommand::Remove { name },
+                        })
+                    }
+                    "send" => {
+                        let name = sub_arg1
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "Missing multisig name. Usage: multisig send <name> <recipient> <amount>"
+                                )
+                            })?
+                            .to_string();
+                        let recipient = sub_arg2
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "Missing recipient. Usage: multisig send <name> <recipient> <amount>"
+                                )
+                            })?
+                            .to_string();
+                        let amount = sub_arg3
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "Missing amount. Usage: multisig send <name> <recipient> <amount>"
+                                )
+                            })?
+                            .to_string();
+                        Ok(Command::Multisig {
+                            subcommand: MultisigSubcommand::Send {
+                                name,
+                                recipient,
+                                amount,
+                            },
+                        })
+                    }
+                    "proposals" | "props" => {
+                        let name = sub_arg1.map(|s| s.to_string());
+                        Ok(Command::Multisig {
+                            subcommand: MultisigSubcommand::Proposals { name },
+                        })
+                    }
+                    "proposal" | "prop" => {
+                        let id = sub_arg1
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "Missing proposal ID. Usage: multisig proposal <id>"
+                                )
+                            })?
+                            .to_string();
+                        Ok(Command::Multisig {
+                            subcommand: MultisigSubcommand::Proposal { id },
+                        })
+                    }
+                    "cancel" => {
+                        let id = sub_arg1
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("Missing proposal ID. Usage: multisig cancel <id>")
+                            })?
+                            .to_string();
+                        Ok(Command::Multisig {
+                            subcommand: MultisigSubcommand::Cancel { id },
+                        })
+                    }
+                    "add-sig" | "addsig" => {
+                        let id = sub_arg1
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "Missing proposal ID. Usage: multisig add-sig <id> <file>"
+                                )
+                            })?
+                            .to_string();
+                        let file = sub_arg2
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "Missing file. Usage: multisig add-sig <id> <file>"
+                                )
+                            })?
+                            .to_string();
+                        Ok(Command::Multisig {
+                            subcommand: MultisigSubcommand::AddSig { id, file },
+                        })
+                    }
+                    "submit" => {
+                        let id = sub_arg1
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("Missing proposal ID. Usage: multisig submit <id>")
+                            })?
+                            .to_string();
+                        Ok(Command::Multisig {
+                            subcommand: MultisigSubcommand::Submit { id },
+                        })
+                    }
+                    "sign" => {
+                        let file = sub_arg1
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("Missing file. Usage: multisig sign <file>")
+                            })?
+                            .to_string();
+                        Ok(Command::Multisig {
+                            subcommand: MultisigSubcommand::Sign { file },
+                        })
+                    }
+                    other => bail!(
+                        "Unknown multisig subcommand: '{other}'. Usage: multisig [list|show|import|export|remove|send|proposals|proposal|cancel|add-sig|submit|sign]"
+                    ),
                 }
             }
 

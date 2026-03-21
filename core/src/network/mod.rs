@@ -4,7 +4,7 @@ mod names;
 mod nfts;
 mod notarize;
 mod staking;
-mod transfer;
+pub(crate) mod transfer;
 mod types;
 
 pub use notarize::TESTNET_NOTARIZATION_PACKAGE;
@@ -38,6 +38,11 @@ fn validate_node_url(url: &str, allow_insecure: bool) -> Result<()> {
 }
 
 impl NetworkClient {
+    /// Public accessor for the underlying GraphQL client.
+    pub fn client(&self) -> &Client {
+        &self.client
+    }
+
     /// Execute a GraphQL query from a JSON value, returning the `data` field.
     async fn execute_query(
         &self,

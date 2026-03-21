@@ -203,7 +203,7 @@ impl NetworkClient {
 
 /// Best-effort extraction of the transfer amount from a ProgrammableTransaction.
 /// Works for standard SplitCoins-based IOTA transfers built by the SDK.
-pub(super) fn extract_transfer_amount(kind: &TransactionKind) -> Option<u64> {
+pub fn extract_transfer_amount(kind: &TransactionKind) -> Option<u64> {
     let ptb = kind.as_programmable_transaction_opt()?;
     for cmd in &ptb.commands {
         if let TxCommand::SplitCoins(split) = cmd {
@@ -229,7 +229,7 @@ pub(super) fn extract_transfer_amount(kind: &TransactionKind) -> Option<u64> {
 
 /// Best-effort extraction of the transfer recipient from a ProgrammableTransaction.
 /// Looks for TransferObjects commands with a pure address argument.
-pub(super) fn extract_transfer_recipient(kind: &TransactionKind) -> Option<String> {
+pub fn extract_transfer_recipient(kind: &TransactionKind) -> Option<String> {
     let ptb = kind.as_programmable_transaction_opt()?;
     for cmd in &ptb.commands {
         if let TxCommand::TransferObjects(transfer) = cmd {

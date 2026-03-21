@@ -52,6 +52,9 @@ pub fn help_text(command: Option<&str>) -> String {
         Some("contacts") | Some("contact") => {
             "contacts [add|remove|export|import]\n  Manage your address book.\n  contacts              List all contacts\n  contacts add <name> <address|name.iota>   Add a contact\n  contacts remove <name>                    Remove a contact\n  contacts export                           Print contacts as JSON\n  contacts import <file>                    Import contacts from JSON file\n  Alias: contact".to_string()
         }
+        Some("multisig") | Some("ms") => {
+            "multisig (ms)\n  Manage multisig wallets and proposals.\n\n  Setup:\n    multisig create <name>                 Interactive wizard to create a multisig\n    multisig list                          List configured multisig addresses\n    multisig show <name>                   Show participants, threshold, balance\n    multisig import <file>                 Import .jota-multisig definition\n    multisig export <name>                 Export .jota-multisig for sharing\n    multisig remove <name>                 Remove a multisig config\n\n  Proposals:\n    multisig send <name> <recipient> <amt> Propose a transfer\n    multisig proposals [name]              List pending proposals\n    multisig proposal <id>                 Show proposal details\n    multisig cancel <id>                   Cancel a proposal locally\n    multisig add-sig <id> <file>           Import a .jota-sig or .jota-proposal\n    multisig submit <id>                   Submit when threshold is met\n\n  Signing:\n    multisig sign <file>                   Review + sign a .jota-proposal\n\n  Alias: ms".to_string()
+        }
         Some("password") | Some("passwd") => {
             "password\n  Change the wallet's encryption password.\n  Alias: passwd".to_string()
         }
@@ -89,6 +92,7 @@ pub fn help_text(command: Option<&str>) -> String {
              \x20 status           Show network status\n\
              \x20 faucet           Request testnet/devnet tokens\n\
              \x20 contacts          Manage address book\n\
+             \x20 multisig          Manage multisig wallets and proposals\n\
              \x20 sign_message      Sign a message with your key\n\
              \x20 verify            Verify a signed message\n\
              \x20 notarize          Notarize a message on-chain\n\

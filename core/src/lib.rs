@@ -9,6 +9,7 @@ pub mod display;
 pub mod error;
 #[cfg(feature = "ledger")]
 pub mod ledger_signer;
+pub mod multisig;
 #[cfg(feature = "ledger")]
 pub use ledger_iota::Bip32Path;
 #[cfg(feature = "ledger")]
@@ -39,7 +40,11 @@ pub use service::WalletService;
 pub use signer::{verify_message, SignedMessage, Signer, SoftwareSigner};
 pub use wallet::{AccountRecord, HardwareKind, Wallet, WalletType};
 
-pub use iota_sdk::types::{Address, ObjectId};
+pub use bcs;
+pub use iota_sdk::types::{
+    Address, Ed25519PublicKey, MultisigCommittee, MultisigMember, MultisigMemberPublicKey,
+    ObjectId, Secp256k1PublicKey, Secp256r1PublicKey,
+};
 
 /// Reject wallet names containing path separators or traversal sequences.
 pub fn validate_wallet_name(name: &str) -> anyhow::Result<()> {

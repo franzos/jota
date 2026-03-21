@@ -31,6 +31,14 @@ use messages::Message;
 use native_messaging::NativeResponse;
 use state::{PendingApproval, Screen, SignMode, WalletInfo};
 
+#[derive(Clone, Default)]
+struct MultisigMemberForm {
+    label: String,
+    public_key: String,
+    weight: String,
+    scheme: String, // "ed25519", "secp256k1", "secp256r1" — auto-detected from key length
+}
+
 // IOTA Explorer dark-mode palette (iota2.darkmode)
 const BG: Color = Color::from_rgb(0.051, 0.067, 0.090); // #0d1117
 const SIDEBAR: Color = Color::from_rgb(0.024, 0.039, 0.063); // #060a10
@@ -100,6 +108,50 @@ struct App {
     contact_form_address: String,
     contact_form_editing: Option<usize>,
     save_contact_offer: Option<String>, // address offered for saving after send
+
+    // Multisig
+    multisig_configs: Vec<jota_core::multisig::MultisigConfig>,
+    multisig_proposals: Vec<jota_core::multisig::TransactionProposal>,
+    multisig_selected: Option<usize>,
+    multisig_proposal_selected: Option<usize>,
+    multisig_import_error: Option<String>,
+
+    // Multisig create wizard
+    multisig_create_visible: bool,
+    multisig_create_step: u8,
+    multisig_create_name: String,
+    multisig_create_num_participants: String,
+    multisig_create_threshold: String,
+    multisig_create_members: Vec<MultisigMemberForm>,
+    multisig_create_my_weight: String,
+    multisig_create_my_label: String,
+    multisig_create_error: Option<String>,
+    multisig_my_public_key_b64: Option<String>,
+
+    // Multisig send
+    multisig_send_visible: bool,
+    multisig_send_config_idx: Option<usize>,
+    multisig_send_recipient: String,
+    multisig_send_amount: String,
+    multisig_send_error: Option<String>,
+
+    // Multisig import (path-based)
+    multisig_import_path: String,
+    multisig_import_visible: bool,
+
+    // Multisig sign external
+    multisig_sign_visible: bool,
+    multisig_sign_proposal_file: Option<jota_core::multisig::ProposalFile>,
+    multisig_sign_error: Option<String>,
+    multisig_sign_external_path: String,
+
+    // Multisig import signature
+    multisig_import_sig_digest: Option<String>,
+    multisig_import_sig_path: String,
+    multisig_import_sig_visible: bool,
+
+    // Multisig context switching
+    active_multisig: Option<usize>,
 
     // Staking
     stakes: Vec<StakedIotaSummary>,
@@ -285,6 +337,36 @@ impl App {
             contact_form_address: String::new(),
             contact_form_editing: None,
             save_contact_offer: None,
+            multisig_configs: Vec::new(),
+            multisig_proposals: Vec::new(),
+            multisig_selected: None,
+            multisig_proposal_selected: None,
+            multisig_import_error: None,
+            multisig_create_visible: false,
+            multisig_create_step: 0,
+            multisig_create_name: String::new(),
+            multisig_create_num_participants: "2".to_string(),
+            multisig_create_threshold: String::new(),
+            multisig_create_members: Vec::new(),
+            multisig_create_my_weight: "1".to_string(),
+            multisig_create_my_label: "me".to_string(),
+            multisig_create_error: None,
+            multisig_my_public_key_b64: None,
+            multisig_send_visible: false,
+            multisig_send_config_idx: None,
+            multisig_send_recipient: String::new(),
+            multisig_send_amount: String::new(),
+            multisig_send_error: None,
+            multisig_import_path: String::new(),
+            multisig_import_visible: false,
+            multisig_sign_visible: false,
+            multisig_sign_proposal_file: None,
+            multisig_sign_error: None,
+            multisig_sign_external_path: String::new(),
+            multisig_import_sig_digest: None,
+            multisig_import_sig_path: String::new(),
+            multisig_import_sig_visible: false,
+            active_multisig: None,
             stakes: Vec::new(),
             validators: Vec::new(),
             validator_address: String::new(),
@@ -341,6 +423,39 @@ impl App {
             ),
         };
         (app, Task::none())
+    }
+
+    /// Returns the currently active address — multisig if activated, otherwise personal.
+    fn active_address(&self) -> Option<jota_core::Address> {
+        if let Some(idx) = self.active_multisig {
+            self.multisig_configs.get(idx).map(|c| c.address())
+        } else {
+            self.wallet_info.as_ref().map(|i| i.address)
+        }
+    }
+
+    fn active_address_string(&self) -> String {
+        if let Some(idx) = self.active_multisig {
+            self.multisig_configs
+                .get(idx)
+                .map(|c| c.address().to_string())
+                .unwrap_or_default()
+        } else {
+            self.wallet_info
+                .as_ref()
+                .map(|i| i.address_string.clone())
+                .unwrap_or_default()
+        }
+    }
+
+    fn is_multisig_active(&self) -> bool {
+        self.active_multisig.is_some()
+    }
+
+    fn active_multisig_name(&self) -> Option<&str> {
+        self.active_multisig
+            .and_then(|idx| self.multisig_configs.get(idx))
+            .map(|c| c.name.as_str())
     }
 
     fn parse_network_from_args() -> NetworkConfig {
@@ -406,6 +521,7 @@ impl App {
             | Screen::Receive
             | Screen::History
             | Screen::Contacts
+            | Screen::Multisig
             | Screen::Staking
             | Screen::Nfts
             | Screen::Sign
@@ -422,6 +538,7 @@ impl App {
             Screen::Receive => self.view_receive(),
             Screen::History => self.view_history(),
             Screen::Contacts => self.view_contacts(),
+            Screen::Multisig => self.view_multisig(),
             Screen::Staking => self.view_staking(),
             Screen::Nfts => self.view_nfts(),
             Screen::Sign => self.view_sign(),
@@ -484,6 +601,138 @@ impl App {
                         }),
                 )
                 .on_press(Message::SelectValidator(idx));
+
+                return Stack::new()
+                    .push(main_layout)
+                    .push(backdrop)
+                    .width(Fill)
+                    .height(Fill)
+                    .into();
+            }
+        }
+
+        // Layer multisig send modal
+        if self.screen == Screen::Multisig {
+            if let Some(overlay) = self.view_multisig_send_modal() {
+                let backdrop = mouse_area(
+                    container(opaque(overlay))
+                        .center_x(Fill)
+                        .center_y(Fill)
+                        .width(Fill)
+                        .height(Fill)
+                        .style(|_theme| container::Style {
+                            background: Some(Background::Color(Color::from_rgba(
+                                0.0, 0.0, 0.0, 0.55,
+                            ))),
+                            ..Default::default()
+                        }),
+                )
+                .on_press(Message::MultisigCloseSend);
+
+                return Stack::new()
+                    .push(main_layout)
+                    .push(backdrop)
+                    .width(Fill)
+                    .height(Fill)
+                    .into();
+            }
+        }
+
+        // Layer multisig sign external modal
+        if self.screen == Screen::Multisig {
+            if let Some(overlay) = self.view_multisig_sign_modal() {
+                let backdrop = mouse_area(
+                    container(opaque(overlay))
+                        .center_x(Fill)
+                        .center_y(Fill)
+                        .width(Fill)
+                        .height(Fill)
+                        .style(|_theme| container::Style {
+                            background: Some(Background::Color(Color::from_rgba(
+                                0.0, 0.0, 0.0, 0.55,
+                            ))),
+                            ..Default::default()
+                        }),
+                )
+                .on_press(Message::MultisigSignExternalClose);
+
+                return Stack::new()
+                    .push(main_layout)
+                    .push(backdrop)
+                    .width(Fill)
+                    .height(Fill)
+                    .into();
+            }
+        }
+
+        // Layer multisig create wizard modal
+        if self.screen == Screen::Multisig {
+            if let Some(overlay) = self.view_multisig_create_modal() {
+                let backdrop = mouse_area(
+                    container(opaque(overlay))
+                        .center_x(Fill)
+                        .center_y(Fill)
+                        .width(Fill)
+                        .height(Fill)
+                        .style(|_theme| container::Style {
+                            background: Some(Background::Color(Color::from_rgba(
+                                0.0, 0.0, 0.0, 0.55,
+                            ))),
+                            ..Default::default()
+                        }),
+                )
+                .on_press(Message::MultisigCloseCreate);
+
+                return Stack::new()
+                    .push(main_layout)
+                    .push(backdrop)
+                    .width(Fill)
+                    .height(Fill)
+                    .into();
+            }
+        }
+
+        // Layer multisig detail modal when a config is selected
+        if self.screen == Screen::Multisig {
+            if let Some(overlay) = self.view_multisig_detail_modal() {
+                let backdrop = mouse_area(
+                    container(opaque(overlay))
+                        .center_x(Fill)
+                        .center_y(Fill)
+                        .width(Fill)
+                        .height(Fill)
+                        .style(|_theme| container::Style {
+                            background: Some(Background::Color(Color::from_rgba(
+                                0.0, 0.0, 0.0, 0.55,
+                            ))),
+                            ..Default::default()
+                        }),
+                )
+                .on_press(Message::MultisigCloseDetail);
+
+                return Stack::new()
+                    .push(main_layout)
+                    .push(backdrop)
+                    .width(Fill)
+                    .height(Fill)
+                    .into();
+            }
+
+            if let Some(overlay) = self.view_multisig_proposal_modal() {
+                let backdrop = mouse_area(
+                    container(opaque(overlay))
+                        .center_x(Fill)
+                        .center_y(Fill)
+                        .width(Fill)
+                        .height(Fill)
+                        .style(|_theme| container::Style {
+                            background: Some(Background::Color(Color::from_rgba(
+                                0.0, 0.0, 0.0, 0.55,
+                            ))),
+                            ..Default::default()
+                        }),
+                )
+                .on_press(Message::MultisigCloseProposal);
 
                 return Stack::new()
                     .push(main_layout)
@@ -571,6 +820,7 @@ impl App {
             nav_btn("↙", "Receive", Screen::Receive),
             nav_btn("≡", "History", Screen::History),
             nav_btn("☆", "Contacts", Screen::Contacts),
+            nav_btn("◈", "Multisig", Screen::Multisig),
             nav_btn("◆", "Staking", Screen::Staking),
             nav_btn("▣", "NFTs", Screen::Nfts),
             nav_btn("✎", "Sign", Screen::Sign),
@@ -632,8 +882,19 @@ impl App {
             return Space::new().into();
         };
 
-        let wallet_name = self.selected_wallet.as_deref().unwrap_or("Wallet");
-        let name_label = text(wallet_name).size(13).color(MUTED);
+        let is_ms = self.is_multisig_active();
+
+        let display_name = if let Some(ms_name) = self.active_multisig_name() {
+            format!("Multisig: {ms_name}")
+        } else {
+            self.selected_wallet
+                .as_deref()
+                .unwrap_or("Wallet")
+                .to_string()
+        };
+        let name_label = text(display_name)
+            .size(13)
+            .color(if is_ms { PRIMARY } else { MUTED });
 
         let bal = match self.balance {
             Some(b) => format_balance(b),
@@ -641,7 +902,8 @@ impl App {
         };
         let balance_display = text(bal).size(30).font(styles::BOLD);
 
-        let addr_short = helpers::truncate_str(&info.address_string, 10, 8);
+        let display_addr = self.active_address_string();
+        let addr_short = helpers::truncate_str(&display_addr, 10, 8);
         let addr_row = row![
             text(addr_short).size(12).font(Font::MONOSPACE).color(MUTED),
             button(text("Copy").size(11))
@@ -657,7 +919,17 @@ impl App {
             .padding([3, 10])
             .style(styles::pill);
 
-        let left = column![name_label, balance_display].spacing(2);
+        let mut left = column![name_label, balance_display].spacing(2);
+
+        // Show deactivate button when multisig is active
+        if is_ms {
+            let exit_btn = button(text("Back to personal wallet").size(11))
+                .padding([4, 10])
+                .style(styles::btn_secondary)
+                .on_press(Message::MultisigDeactivate);
+            left = left.push(exit_btn);
+        }
+
         let right = column![network_badge, addr_row]
             .spacing(6)
             .align_x(iced::Alignment::End);
@@ -666,7 +938,12 @@ impl App {
             .padding(15)
             .align_y(iced::Alignment::Center);
 
-        // -- Account toolbar --
+        // -- Account toolbar (hidden when multisig active) --
+        if is_ms {
+            return column![main_row].into();
+        }
+
+        let wallet_name = self.selected_wallet.as_deref().unwrap_or("Wallet");
         let account_idx = info.account_index;
         let acct_label = if let Some(kind) = info.hardware_kind {
             format!("Account {wallet_name} #{account_idx} ({kind})")

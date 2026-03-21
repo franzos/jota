@@ -5,6 +5,7 @@ mod create;
 #[cfg(feature = "hardware-wallets")]
 mod hardware;
 mod history;
+mod multisig;
 mod nfts;
 mod open;
 mod receive;

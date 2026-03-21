@@ -32,6 +32,8 @@ assets = [
 
 [dependencies]
 jota-core = { path = "../core" }
+iota-sdk = "3.0.0-alpha.1"
+base64ct = { version = "1", features = ["alloc"] }
 clap = { version = "4", features = ["derive", "env"] }
 reedline = "0.45"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

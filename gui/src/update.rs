@@ -27,6 +27,7 @@ impl App {
             Message::GoTo(screen) => {
                 self.clear_form();
                 if screen == Screen::WalletSelect {
+                    self.active_multisig = None;
                     self.wallet_entries = list_wallets(&self.wallet_dir);
                     self.wallet_info = None;
                     self.qr_data = None;
@@ -38,6 +39,8 @@ impl App {
                     self.stakes.clear();
                     self.validators.clear();
                     self.nfts.clear();
+                    self.multisig_configs.clear();
+                    self.multisig_proposals.clear();
                     self.token_balances.clear();
                     self.token_meta.clear();
                     self.session_password.zeroize();
@@ -45,6 +48,7 @@ impl App {
                 let load_contacts = screen == Screen::Contacts || screen == Screen::Send;
                 let load_stakes = screen == Screen::Staking;
                 let load_nfts = screen == Screen::Nfts;
+                let load_multisig = screen == Screen::Multisig;
                 self.screen = screen;
                 if load_contacts {
                     return self.load_contacts();
@@ -54,6 +58,20 @@ impl App {
                 }
                 if load_nfts {
                     return self.load_nfts();
+                }
+                if load_multisig {
+                    // Compute public key for display on the multisig page
+                    if self.multisig_my_public_key_b64.is_none() {
+                        self.multisig_my_public_key_b64 =
+                            self.wallet_info.as_ref().and_then(|info| {
+                                info.service
+                                    .signer()
+                                    .public_key_bytes()
+                                    .ok()
+                                    .map(|bytes| base64ct::Base64::encode_string(&bytes))
+                            });
+                    }
+                    return self.load_multisig();
                 }
                 Task::none()
             }
@@ -481,13 +499,14 @@ impl App {
                     return Task::none();
                 };
                 let service = info.service.clone();
+                let addr = self.active_address().unwrap_or(info.address);
                 self.loading += 1;
                 self.error_message = None;
                 self.success_message = None;
 
                 Task::perform(
                     async move {
-                        service.faucet().await?;
+                        service.network().faucet(&addr).await?;
                         Ok(())
                     },
                     |r: Result<(), anyhow::Error>| {
@@ -509,9 +528,10 @@ impl App {
             }
 
             Message::CopyAddress => {
-                if let Some(info) = &self.wallet_info {
+                if self.wallet_info.is_some() {
+                    let addr = self.active_address_string();
                     if let Some(cb) = &mut self.clipboard {
-                        match cb.set_text(&info.address_string) {
+                        match cb.set_text(&addr) {
                             Ok(_) => self.status_message = Some("Address copied".into()),
                             Err(e) => self.error_message = Some(format!("Copy failed: {e}")),
                         }
@@ -571,6 +591,131 @@ impl App {
                 let Some(info) = &self.wallet_info else {
                     return Task::none();
                 };
+
+                // When multisig is active, create a proposal instead of a direct send
+                if let Some(ms_idx) = self.active_multisig {
+                    // Only IOTA transfers supported for multisig context sends
+                    if self.selected_token.as_ref().is_some_and(|t| !t.is_iota()) {
+                        self.error_message =
+                            Some("Token transfers not yet supported for multisig.".into());
+                        return Task::none();
+                    }
+
+                    let recipient_str = self.recipient.trim().to_string();
+                    if recipient_str.is_empty() {
+                        self.error_message = Some("Recipient is required".into());
+                        return Task::none();
+                    }
+                    let recipient = match Recipient::parse(&recipient_str) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            self.error_message = Some(e.to_string());
+                            return Task::none();
+                        }
+                    };
+                    let amount = match parse_iota_amount(&self.amount) {
+                        Ok(0) => {
+                            self.error_message = Some("Amount must be greater than 0".into());
+                            return Task::none();
+                        }
+                        Ok(a) => a,
+                        Err(e) => {
+                            self.error_message = Some(e.to_string());
+                            return Task::none();
+                        }
+                    };
+
+                    let Some(config) = self.multisig_configs.get(ms_idx).cloned() else {
+                        self.error_message = Some("Multisig config not found.".into());
+                        return Task::none();
+                    };
+                    let service = info.service.clone();
+                    self.loading += 1;
+                    self.error_message = None;
+
+                    return Task::perform(
+                        async move {
+                            use anyhow::Context;
+                            use jota_core::multisig::*;
+
+                            let resolved = service.resolve_recipient(&recipient).await?;
+                            let multisig_addr = config.address();
+
+                            let balance = service.network().balance(&multisig_addr).await?;
+                            if balance < amount {
+                                anyhow::bail!(
+                                    "Insufficient balance: {} available, {} needed.",
+                                    jota_core::display::format_balance(balance),
+                                    jota_core::display::format_balance(amount),
+                                );
+                            }
+
+                            let tx = build_transfer(
+                                service.network(),
+                                &multisig_addr,
+                                resolved.address,
+                                amount,
+                            )
+                            .await?;
+                            let tx_bytes = jota_core::bcs::to_bytes(&tx)
+                                .context("Failed to serialize transaction")?;
+                            let tx_digest = compute_tx_digest(&tx_bytes)?;
+                            let short_id = &tx_digest[..8.min(tx_digest.len())];
+
+                            let now = timestamp_now();
+
+                            let proposer = config
+                                .my_key
+                                .as_ref()
+                                .and_then(|mk| {
+                                    config
+                                        .committee
+                                        .members()
+                                        .iter()
+                                        .enumerate()
+                                        .find(|(_, m)| m.public_key() == mk)
+                                        .and_then(|(i, _)| config.labels.get(i))
+                                        .cloned()
+                                })
+                                .unwrap_or_else(|| "unknown".to_string());
+
+                            let mut proposal = TransactionProposal {
+                                tx_digest: tx_digest.clone(),
+                                multisig_address: multisig_addr.to_string(),
+                                tx_bytes: tx_bytes.clone(),
+                                proposer,
+                                created_at: now,
+                                expires_at: Some(now + 7 * 24 * 3600),
+                                signatures: Vec::new(),
+                                status: ProposalStatus::Pending,
+                            };
+
+                            if config.my_key.is_some() {
+                                let (member_key, member_sig) = sign_proposal(
+                                    service.network(),
+                                    service.signer().as_ref(),
+                                    &tx_bytes,
+                                )
+                                .await?;
+                                proposal.signatures.push(CollectedSignature {
+                                    member_key,
+                                    signature: member_sig,
+                                    signed_at: now,
+                                });
+                                update_proposal_status(&config.committee, &mut proposal);
+                            }
+
+                            let store = MultisigStore::open()?;
+                            store.save_proposal(&proposal)?;
+
+                            Ok(short_id.to_string())
+                        },
+                        |r: Result<String, anyhow::Error>| {
+                            Message::MultisigSendCompleted(r.map_err(|e| e.to_string()))
+                        },
+                    );
+                }
+
                 let recipient_str = self.recipient.trim().to_string();
                 if recipient_str.is_empty() {
                     self.error_message = Some("Recipient is required".into());
@@ -881,6 +1026,11 @@ impl App {
             Message::RefreshStakes => Task::batch([self.load_stakes(), self.load_validators()]),
 
             Message::ConfirmStake => {
+                if self.is_multisig_active() {
+                    self.error_message =
+                        Some("Staking is not available for multisig addresses.".into());
+                    return Task::none();
+                }
                 let Some(info) = &self.wallet_info else {
                     return Task::none();
                 };
@@ -949,6 +1099,11 @@ impl App {
             }
 
             Message::ConfirmUnstake(object_id_str) => {
+                if self.is_multisig_active() {
+                    self.error_message =
+                        Some("Unstaking is not available for multisig addresses.".into());
+                    return Task::none();
+                }
                 let Some(info) = &self.wallet_info else {
                     return Task::none();
                 };
@@ -1042,6 +1197,11 @@ impl App {
             }
 
             Message::ConfirmSendNft => {
+                if self.is_multisig_active() {
+                    self.error_message =
+                        Some("NFT transfers are not available for multisig addresses.".into());
+                    return Task::none();
+                }
                 let Some(info) = &self.wallet_info else {
                     return Task::none();
                 };
@@ -1101,6 +1261,1307 @@ impl App {
                 self.send_nft_object_id = None;
                 self.send_nft_recipient.clear();
                 self.error_message = None;
+                Task::none()
+            }
+
+            // -- Multisig --
+            Message::MultisigLoaded(result) => {
+                self.loading = self.loading.saturating_sub(1);
+                match result {
+                    Ok((configs, proposals)) => {
+                        // Deactivate if the active index is now out of bounds
+                        if let Some(idx) = self.active_multisig {
+                            if idx >= configs.len() {
+                                self.active_multisig = None;
+                            }
+                        }
+                        self.multisig_configs = configs;
+                        self.multisig_proposals = proposals;
+                    }
+                    Err(e) => self.error_message = Some(e),
+                }
+                Task::none()
+            }
+
+            Message::RefreshMultisig => self.load_multisig(),
+
+            Message::MultisigSelectConfig(idx) => {
+                self.multisig_selected = Some(idx);
+                Task::none()
+            }
+
+            Message::MultisigCloseDetail => {
+                self.multisig_selected = None;
+                Task::none()
+            }
+
+            Message::MultisigSelectProposal(idx) => {
+                self.multisig_proposal_selected = Some(idx);
+                Task::none()
+            }
+
+            Message::MultisigCloseProposal => {
+                self.multisig_proposal_selected = None;
+                Task::none()
+            }
+
+            Message::MultisigRemoveConfig(name) => {
+                self.loading += 1;
+                Task::perform(
+                    async move {
+                        let store = jota_core::multisig::MultisigStore::open()?;
+                        store.remove_config(&name)?;
+                        Ok(())
+                    },
+                    |r: Result<(), anyhow::Error>| {
+                        Message::MultisigConfigRemoved(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+
+            Message::MultisigConfigRemoved(result) => {
+                self.loading = self.loading.saturating_sub(1);
+                match result {
+                    Ok(()) => {
+                        self.success_message = Some("Multisig config removed.".into());
+                        self.multisig_selected = None;
+                        // Deactivate if the removed config was active
+                        self.active_multisig = None;
+                        return self.load_multisig();
+                    }
+                    Err(e) => self.error_message = Some(e),
+                }
+                Task::none()
+            }
+
+            Message::MultisigActivate(idx) => {
+                self.active_multisig = Some(idx);
+                self.multisig_selected = None;
+                self.screen = Screen::Account;
+                self.balance = None;
+                self.transactions.clear();
+                self.account_transactions.clear();
+                self.epoch_deltas.clear();
+                self.balance_chart.clear();
+                self.stakes.clear();
+                self.nfts.clear();
+                self.token_balances.clear();
+                self.token_meta.clear();
+                self.selected_token = None;
+                self.qr_data = iced::widget::qr_code::Data::new(self.active_address_string()).ok();
+                self.refresh_dashboard()
+            }
+
+            Message::MultisigDeactivate => {
+                self.active_multisig = None;
+                self.balance = None;
+                self.transactions.clear();
+                self.account_transactions.clear();
+                self.epoch_deltas.clear();
+                self.balance_chart.clear();
+                self.stakes.clear();
+                self.nfts.clear();
+                self.token_balances.clear();
+                self.token_meta.clear();
+                self.selected_token = None;
+                if let Some(info) = &self.wallet_info {
+                    self.qr_data = iced::widget::qr_code::Data::new(&info.address_string).ok();
+                }
+                self.screen = Screen::Account;
+                self.refresh_dashboard()
+            }
+
+            Message::MultisigSubmitProposal(digest) => {
+                let Some(info) = &self.wallet_info else {
+                    return Task::none();
+                };
+                self.loading += 1;
+                let service = info.service.clone();
+                let configs = self.multisig_configs.clone();
+
+                Task::perform(
+                    async move {
+                        let store = jota_core::multisig::MultisigStore::open()?;
+                        let mut proposal = store.find_proposal_by_prefix(&digest)?;
+                        let config = configs
+                            .iter()
+                            .find(|c| {
+                                c.address().to_string().to_lowercase()
+                                    == proposal.multisig_address.to_lowercase()
+                            })
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("No multisig config found for this proposal")
+                            })?;
+                        let result = jota_core::multisig::aggregate_and_submit(
+                            service.network(),
+                            &config.committee,
+                            &mut proposal,
+                        )
+                        .await?;
+                        store.save_proposal(&proposal)?;
+                        Ok(format!("Submitted! Digest: {}", result.digest))
+                    },
+                    |r: Result<String, anyhow::Error>| {
+                        Message::MultisigSubmitCompleted(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+
+            Message::MultisigSubmitCompleted(result) => {
+                self.loading = self.loading.saturating_sub(1);
+                match result {
+                    Ok(msg) => {
+                        self.success_message = Some(msg);
+                        return self.load_multisig();
+                    }
+                    Err(e) => self.error_message = Some(e),
+                }
+                Task::none()
+            }
+
+            Message::MultisigCancelProposal(digest) => {
+                self.loading += 1;
+                Task::perform(
+                    async move {
+                        let store = jota_core::multisig::MultisigStore::open()?;
+                        let mut proposal = store.find_proposal_by_prefix(&digest)?;
+                        proposal.status = jota_core::multisig::ProposalStatus::Cancelled;
+                        store.save_proposal(&proposal)?;
+                        Ok(())
+                    },
+                    |r: Result<(), anyhow::Error>| {
+                        Message::MultisigProposalCancelled(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+
+            Message::MultisigProposalCancelled(result) => {
+                self.loading = self.loading.saturating_sub(1);
+                match result {
+                    Ok(()) => {
+                        self.success_message = Some("Proposal cancelled.".into());
+                        self.multisig_proposal_selected = None;
+                        return self.load_multisig();
+                    }
+                    Err(e) => self.error_message = Some(e),
+                }
+                Task::none()
+            }
+
+            // -- Multisig Import --
+            Message::MultisigImportFile => {
+                self.multisig_import_visible = !self.multisig_import_visible;
+                if !self.multisig_import_visible {
+                    self.multisig_import_path.clear();
+                }
+                Task::none()
+            }
+
+            Message::MultisigImportPathChanged(v) => {
+                self.multisig_import_path = v;
+                Task::none()
+            }
+
+            Message::MultisigCloseImport => {
+                self.multisig_import_visible = false;
+                self.multisig_import_path.clear();
+                Task::none()
+            }
+
+            Message::MultisigImportConfirm => {
+                let path = self.multisig_import_path.trim().to_string();
+                if path.is_empty() {
+                    self.error_message = Some("Please enter a file path.".into());
+                    return Task::none();
+                }
+                let Some(info) = &self.wallet_info else {
+                    return Task::none();
+                };
+                let service = info.service.clone();
+                let network = info.network_config.network;
+                self.loading += 1;
+                self.error_message = None;
+
+                Task::perform(
+                    async move {
+                        use anyhow::Context;
+
+                        let data = std::fs::read(&path)
+                            .map_err(|e| anyhow::anyhow!("Failed to read file: {e}"))?;
+                        let json = String::from_utf8(data)
+                            .map_err(|_| anyhow::anyhow!("File is not valid UTF-8"))?;
+                        let ms_file: jota_core::multisig::MultisigFile =
+                            serde_json::from_str(&json).context("Failed to parse multisig file")?;
+                        let network_name = service.network_name();
+                        ms_file.validate(network_name)?;
+                        let committee = ms_file.to_committee()?;
+                        let labels: Vec<String> =
+                            ms_file.members.iter().map(|m| m.label.clone()).collect();
+                        let filename = std::path::Path::new(&path)
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or(&path);
+                        let name = filename.trim_end_matches(".jota-multisig").to_string();
+                        let mut config = jota_core::multisig::MultisigConfig {
+                            name: name.clone(),
+                            committee,
+                            labels,
+                            network,
+                            my_key: None,
+                        };
+                        if let Ok(pk_bytes) = service.signer().public_key_bytes() {
+                            config.detect_my_key(&pk_bytes);
+                        }
+                        let store = jota_core::multisig::MultisigStore::open()?;
+                        store.save_config(&config)?;
+                        Ok(format!("Imported: {name}"))
+                    },
+                    |r: Result<String, anyhow::Error>| {
+                        Message::MultisigImportCompleted(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+
+            Message::MultisigImportCompleted(result) => {
+                self.loading = self.loading.saturating_sub(1);
+                match result {
+                    Ok(msg) => {
+                        self.multisig_import_visible = false;
+                        self.multisig_import_path.clear();
+                        self.success_message = Some(msg);
+                        return self.load_multisig();
+                    }
+                    Err(e) => self.error_message = Some(e),
+                }
+                Task::none()
+            }
+
+            // -- Multisig Create Wizard --
+            Message::MultisigOpenCreate => {
+                self.multisig_create_visible = true;
+                self.multisig_create_step = 0;
+                self.multisig_create_name.clear();
+                self.multisig_create_num_participants = "2".to_string();
+                self.multisig_create_threshold.clear();
+                self.multisig_create_members.clear();
+                self.multisig_create_my_weight = "1".to_string();
+                self.multisig_create_my_label = "me".to_string();
+                self.multisig_create_error = None;
+                self.error_message = None;
+                self.success_message = None;
+                // Compute local public key for display
+                self.multisig_my_public_key_b64 = self.wallet_info.as_ref().and_then(|info| {
+                    info.service
+                        .signer()
+                        .public_key_bytes()
+                        .ok()
+                        .map(|bytes| base64ct::Base64::encode_string(&bytes))
+                });
+                Task::none()
+            }
+
+            Message::MultisigCloseCreate => {
+                self.multisig_create_visible = false;
+                self.multisig_create_error = None;
+                Task::none()
+            }
+
+            Message::MultisigCreateNameChanged(v) => {
+                self.multisig_create_name = v;
+                Task::none()
+            }
+            Message::MultisigCreateNumParticipantsChanged(v) => {
+                self.multisig_create_num_participants = v;
+                Task::none()
+            }
+            Message::MultisigCreateThresholdChanged(v) => {
+                self.multisig_create_threshold = v;
+                Task::none()
+            }
+            Message::MultisigCreateMyWeightChanged(v) => {
+                self.multisig_create_my_weight = v;
+                Task::none()
+            }
+            Message::MultisigCreateMyLabelChanged(v) => {
+                self.multisig_create_my_label = v;
+                Task::none()
+            }
+            Message::MultisigCreateMemberLabelChanged(idx, v) => {
+                if let Some(m) = self.multisig_create_members.get_mut(idx) {
+                    m.label = v;
+                }
+                Task::none()
+            }
+            Message::MultisigCreateMemberKeyChanged(idx, v) => {
+                if let Some(m) = self.multisig_create_members.get_mut(idx) {
+                    m.public_key = v;
+                }
+                Task::none()
+            }
+            Message::MultisigCreateMemberWeightChanged(idx, v) => {
+                if let Some(m) = self.multisig_create_members.get_mut(idx) {
+                    m.weight = v;
+                }
+                Task::none()
+            }
+
+            Message::MultisigCreateMemberSchemeChanged(idx, v) => {
+                if let Some(m) = self.multisig_create_members.get_mut(idx) {
+                    m.scheme = v;
+                }
+                Task::none()
+            }
+
+            Message::MultisigCreateNextStep => {
+                self.multisig_create_error = None;
+
+                match self.multisig_create_step {
+                    0 => {
+                        // Validate step 0: name, num participants, threshold
+                        let name = self.multisig_create_name.trim();
+                        if name.is_empty() {
+                            self.multisig_create_error = Some("Name is required.".into());
+                            return Task::none();
+                        }
+                        if let Err(e) = validate_wallet_name(name) {
+                            self.multisig_create_error = Some(e.to_string());
+                            return Task::none();
+                        }
+
+                        let n: usize = match self.multisig_create_num_participants.trim().parse() {
+                            Ok(n) if (2..=10).contains(&n) => n,
+                            _ => {
+                                self.multisig_create_error =
+                                    Some("Participants must be between 2 and 10.".into());
+                                return Task::none();
+                            }
+                        };
+
+                        let threshold_str = self.multisig_create_threshold.trim();
+                        let threshold: u16 = if threshold_str.is_empty() {
+                            n as u16
+                        } else {
+                            match threshold_str.parse::<u16>() {
+                                Ok(t) if t >= 1 && (t as usize) <= n => t,
+                                _ => {
+                                    self.multisig_create_error =
+                                        Some(format!("Threshold must be between 1 and {n}."));
+                                    return Task::none();
+                                }
+                            }
+                        };
+                        // Update threshold display to show what will be used
+                        self.multisig_create_threshold = threshold.to_string();
+
+                        // Pre-populate member forms for remote participants (n - 1)
+                        let remote_count = n - 1;
+                        self.multisig_create_members.resize_with(remote_count, || {
+                            crate::MultisigMemberForm {
+                                label: String::new(),
+                                public_key: String::new(),
+                                weight: "1".to_string(),
+                                scheme: String::new(),
+                            }
+                        });
+                        self.multisig_create_members.truncate(remote_count);
+
+                        self.multisig_create_step = 1;
+                    }
+                    1 => {
+                        // Validate step 1: all member forms
+                        for (i, m) in self.multisig_create_members.iter().enumerate() {
+                            if m.label.trim().is_empty() {
+                                self.multisig_create_error =
+                                    Some(format!("Label for participant {} is required.", i + 2));
+                                return Task::none();
+                            }
+                            let pk_str = m.public_key.trim();
+                            if pk_str.is_empty() {
+                                self.multisig_create_error = Some(format!(
+                                    "Public key for participant {} is required.",
+                                    i + 2
+                                ));
+                                return Task::none();
+                            }
+                            match base64ct::Base64::decode_vec(pk_str) {
+                                Ok(bytes) if bytes.len() == 32 || bytes.len() == 33 => {}
+                                _ => {
+                                    self.multisig_create_error = Some(format!(
+                                        "Invalid public key for participant {}. Provide base64-encoded key (32 or 33 bytes).",
+                                        i + 2
+                                    ));
+                                    return Task::none();
+                                }
+                            }
+                            let w_str = m.weight.trim();
+                            if !w_str.is_empty() {
+                                match w_str.parse::<u8>() {
+                                    Ok(w) if w >= 1 => {}
+                                    _ => {
+                                        self.multisig_create_error = Some(format!(
+                                            "Weight for participant {} must be a positive number.",
+                                            i + 2
+                                        ));
+                                        return Task::none();
+                                    }
+                                }
+                            }
+                        }
+
+                        self.multisig_create_step = 2;
+                    }
+                    _ => {}
+                }
+                Task::none()
+            }
+
+            Message::MultisigCreatePrevStep => {
+                self.multisig_create_error = None;
+                if self.multisig_create_step > 0 {
+                    self.multisig_create_step -= 1;
+                }
+                Task::none()
+            }
+
+            Message::MultisigCreateConfirm => {
+                let Some(info) = &self.wallet_info else {
+                    return Task::none();
+                };
+                self.loading += 1;
+                self.multisig_create_error = None;
+
+                let name = self.multisig_create_name.trim().to_string();
+                let threshold: u16 = self.multisig_create_threshold.parse().unwrap_or(2);
+                let my_label = self.multisig_create_my_label.trim().to_string();
+                let my_weight: u8 = self.multisig_create_my_weight.trim().parse().unwrap_or(1);
+                let members_data = self.multisig_create_members.clone();
+                let service = info.service.clone();
+                let network = info.network_config.network;
+
+                Task::perform(
+                    async move {
+                        use anyhow::Context;
+                        use base64ct::{Base64, Encoding};
+                        use jota_core::{
+                            Ed25519PublicKey, MultisigCommittee, MultisigMember,
+                            MultisigMemberPublicKey, Secp256k1PublicKey,
+                        };
+
+                        let pk_bytes = service.signer().public_key_bytes()?;
+                        let local_pk = MultisigMemberPublicKey::Ed25519(Ed25519PublicKey::new(
+                            pk_bytes
+                                .as_slice()
+                                .try_into()
+                                .context("Invalid public key length")?,
+                        ));
+
+                        let mut members = vec![MultisigMember::new(local_pk.clone(), my_weight)];
+                        let mut labels = vec![my_label];
+
+                        for m in &members_data {
+                            let decoded = Base64::decode_vec(m.public_key.trim())
+                                .context("Invalid base64 public key")?;
+                            let pk = match decoded.len() {
+                                32 => MultisigMemberPublicKey::Ed25519(Ed25519PublicKey::new(
+                                    decoded.try_into().unwrap(),
+                                )),
+                                33 => match m.scheme.to_lowercase().as_str() {
+                                    "secp256r1" | "r1" => MultisigMemberPublicKey::Secp256r1(
+                                        jota_core::Secp256r1PublicKey::new(
+                                            decoded.try_into().unwrap(),
+                                        ),
+                                    ),
+                                    _ => MultisigMemberPublicKey::Secp256k1(
+                                        Secp256k1PublicKey::new(decoded.try_into().unwrap()),
+                                    ),
+                                },
+                                _ => {
+                                    anyhow::bail!(
+                                        "Invalid public key length for '{}'. Expected 32 (Ed25519) or 33 (Secp256k1/r1) bytes.",
+                                        m.label
+                                    );
+                                }
+                            };
+                            let w: u8 = m.weight.trim().parse().unwrap_or(1);
+                            members.push(MultisigMember::new(pk, w));
+                            labels.push(m.label.trim().to_string());
+                        }
+
+                        let committee = MultisigCommittee::new(members, threshold);
+                        if !committee.is_valid() {
+                            anyhow::bail!(
+                                "Invalid committee: check that total weight >= threshold and no duplicate keys."
+                            );
+                        }
+
+                        let addr = committee.derive_address();
+                        let config = jota_core::multisig::MultisigConfig {
+                            name: name.clone(),
+                            committee,
+                            labels,
+                            network,
+                            my_key: Some(local_pk),
+                        };
+                        let store = jota_core::multisig::MultisigStore::open()?;
+                        store.save_config(&config)?;
+                        Ok(format!("Created: {} ({})", name, addr))
+                    },
+                    |r: Result<String, anyhow::Error>| {
+                        Message::MultisigCreateCompleted(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+
+            Message::MultisigCreateCompleted(result) => {
+                self.loading = self.loading.saturating_sub(1);
+                match result {
+                    Ok(msg) => {
+                        self.multisig_create_visible = false;
+                        self.success_message = Some(msg);
+                        return self.load_multisig();
+                    }
+                    Err(e) => self.multisig_create_error = Some(e),
+                }
+                Task::none()
+            }
+
+            Message::MultisigCopyPublicKey => {
+                if let Some(pk) = &self.multisig_my_public_key_b64 {
+                    if let Some(cb) = &mut self.clipboard {
+                        match cb.set_text(pk) {
+                            Ok(_) => self.status_message = Some("Public key copied".into()),
+                            Err(e) => self.error_message = Some(format!("Copy failed: {e}")),
+                        }
+                    }
+                }
+                Task::none()
+            }
+
+            Message::MultisigCopyAddress(addr) => {
+                if let Some(cb) = &mut self.clipboard {
+                    match cb.set_text(&addr) {
+                        Ok(_) => self.status_message = Some("Address copied".into()),
+                        Err(e) => self.error_message = Some(format!("Copy failed: {e}")),
+                    }
+                }
+                Task::none()
+            }
+
+            // -- Multisig Export Config --
+            Message::MultisigExportConfig(idx) => {
+                let Some(info) = &self.wallet_info else {
+                    return Task::none();
+                };
+                let Some(config) = self.multisig_configs.get(idx).cloned() else {
+                    return Task::none();
+                };
+                let network_name = info.service.network_name().to_string();
+
+                Task::perform(
+                    async move {
+                        use jota_core::multisig::formats::MemberEntry;
+
+                        let ms_file = jota_core::multisig::MultisigFile {
+                            version: 1,
+                            file_type: "multisig-address".to_string(),
+                            network: network_name,
+                            members: config
+                                .committee
+                                .members()
+                                .iter()
+                                .enumerate()
+                                .map(|(i, m)| MemberEntry {
+                                    public_key: m.public_key().clone(),
+                                    weight: m.weight(),
+                                    label: config.labels.get(i).cloned().unwrap_or_default(),
+                                })
+                                .collect(),
+                            threshold: config.committee.threshold(),
+                        };
+                        let json = serde_json::to_string_pretty(&ms_file)
+                            .map_err(|e| anyhow::anyhow!("Failed to serialize: {e}"))?;
+
+                        let default_name = format!("{}.jota-multisig", config.name);
+
+                        let handle = rfd::AsyncFileDialog::new()
+                            .add_filter("Jota Multisig", &["jota-multisig"])
+                            .set_file_name(&default_name)
+                            .set_title("Export Multisig")
+                            .save_file()
+                            .await;
+
+                        let path = match handle {
+                            Some(file) => file.path().to_path_buf(),
+                            None => return Ok("Export cancelled.".to_string()),
+                        };
+                        std::fs::write(&path, &json)
+                            .map_err(|e| anyhow::anyhow!("Failed to write: {e}"))?;
+                        Ok(format!("Exported: {}", path.display()))
+                    },
+                    |r: Result<String, anyhow::Error>| {
+                        Message::MultisigExportSaved(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+
+            Message::MultisigExportSaved(result) => {
+                match result {
+                    Ok(msg) => {
+                        self.success_message = Some(msg);
+                        self.multisig_selected = None;
+                    }
+                    Err(e) => self.error_message = Some(e),
+                }
+                Task::none()
+            }
+
+            // -- Multisig Send --
+            Message::MultisigOpenSend(idx) => {
+                self.multisig_send_visible = true;
+                self.multisig_send_config_idx = Some(idx);
+                self.multisig_send_recipient.clear();
+                self.multisig_send_amount.clear();
+                self.multisig_send_error = None;
+                self.multisig_selected = None;
+                Task::none()
+            }
+
+            Message::MultisigCloseSend => {
+                self.multisig_send_visible = false;
+                self.multisig_send_config_idx = None;
+                self.multisig_send_recipient.clear();
+                self.multisig_send_amount.clear();
+                self.multisig_send_error = None;
+                Task::none()
+            }
+
+            Message::MultisigSendRecipientChanged(v) => {
+                self.multisig_send_recipient = v;
+                Task::none()
+            }
+
+            Message::MultisigSendAmountChanged(v) => {
+                self.multisig_send_amount = v;
+                Task::none()
+            }
+
+            Message::MultisigSendConfirm => {
+                let Some(info) = &self.wallet_info else {
+                    return Task::none();
+                };
+                let Some(idx) = self.multisig_send_config_idx else {
+                    return Task::none();
+                };
+                let Some(config) = self.multisig_configs.get(idx).cloned() else {
+                    return Task::none();
+                };
+
+                let recipient_str = self.multisig_send_recipient.trim().to_string();
+                if recipient_str.is_empty() {
+                    self.multisig_send_error = Some("Recipient is required".into());
+                    return Task::none();
+                }
+                let recipient = match Recipient::parse(&recipient_str) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        self.multisig_send_error = Some(e.to_string());
+                        return Task::none();
+                    }
+                };
+                let amount = match parse_iota_amount(&self.multisig_send_amount) {
+                    Ok(0) => {
+                        self.multisig_send_error = Some("Amount must be greater than 0".into());
+                        return Task::none();
+                    }
+                    Ok(a) => a,
+                    Err(e) => {
+                        self.multisig_send_error = Some(e.to_string());
+                        return Task::none();
+                    }
+                };
+
+                let service = info.service.clone();
+                self.loading += 1;
+                self.multisig_send_error = None;
+
+                Task::perform(
+                    async move {
+                        use anyhow::Context;
+                        use jota_core::multisig::*;
+
+                        let resolved = service.resolve_recipient(&recipient).await?;
+                        let multisig_addr = config.address();
+
+                        let balance = service.network().balance(&multisig_addr).await?;
+                        if balance < amount {
+                            anyhow::bail!(
+                                "Insufficient balance: {} available, {} needed.",
+                                jota_core::display::format_balance(balance),
+                                jota_core::display::format_balance(amount),
+                            );
+                        }
+
+                        let tx = build_transfer(
+                            service.network(),
+                            &multisig_addr,
+                            resolved.address,
+                            amount,
+                        )
+                        .await?;
+                        let tx_bytes = jota_core::bcs::to_bytes(&tx)
+                            .context("Failed to serialize transaction")?;
+                        let tx_digest = compute_tx_digest(&tx_bytes)?;
+                        let short_id = &tx_digest[..8.min(tx_digest.len())];
+
+                        let now = timestamp_now();
+
+                        let proposer = config
+                            .my_key
+                            .as_ref()
+                            .and_then(|mk| {
+                                config
+                                    .committee
+                                    .members()
+                                    .iter()
+                                    .enumerate()
+                                    .find(|(_, m)| m.public_key() == mk)
+                                    .and_then(|(i, _)| config.labels.get(i))
+                                    .cloned()
+                            })
+                            .unwrap_or_else(|| "unknown".to_string());
+
+                        let mut proposal = jota_core::multisig::TransactionProposal {
+                            tx_digest: tx_digest.clone(),
+                            multisig_address: multisig_addr.to_string(),
+                            tx_bytes: tx_bytes.clone(),
+                            proposer,
+                            created_at: now,
+                            expires_at: Some(now + 7 * 24 * 3600),
+                            signatures: Vec::new(),
+                            status: jota_core::multisig::ProposalStatus::Pending,
+                        };
+
+                        if config.my_key.is_some() {
+                            let (member_key, member_sig) = sign_proposal(
+                                service.network(),
+                                service.signer().as_ref(),
+                                &tx_bytes,
+                            )
+                            .await?;
+                            proposal
+                                .signatures
+                                .push(jota_core::multisig::CollectedSignature {
+                                    member_key,
+                                    signature: member_sig,
+                                    signed_at: now,
+                                });
+                            update_proposal_status(&config.committee, &mut proposal);
+                        }
+
+                        let store = MultisigStore::open()?;
+                        store.save_proposal(&proposal)?;
+
+                        Ok(short_id.to_string())
+                    },
+                    |r: Result<String, anyhow::Error>| {
+                        Message::MultisigSendCompleted(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+
+            Message::MultisigSendCompleted(result) => {
+                self.loading = self.loading.saturating_sub(1);
+                match result {
+                    Ok(short_id) => {
+                        self.multisig_send_visible = false;
+                        self.multisig_send_config_idx = None;
+                        self.multisig_send_recipient.clear();
+                        self.multisig_send_amount.clear();
+                        self.multisig_send_error = None;
+                        // Also clear regular send form (used when multisig is active)
+                        self.recipient.clear();
+                        self.amount.clear();
+                        self.success_message = Some(format!("Proposal created: {short_id}"));
+                        if self.is_multisig_active() {
+                            self.screen = Screen::Account;
+                            return self.refresh_dashboard();
+                        }
+                        return self.load_multisig();
+                    }
+                    Err(e) => {
+                        if self.is_multisig_active() && self.screen == Screen::Send {
+                            self.error_message = Some(e);
+                        } else {
+                            self.multisig_send_error = Some(e);
+                        }
+                    }
+                }
+                Task::none()
+            }
+
+            Message::MultisigExportProposal(digest) => {
+                let Some(info) = &self.wallet_info else {
+                    return Task::none();
+                };
+                let service = info.service.clone();
+                let configs = self.multisig_configs.clone();
+
+                Task::perform(
+                    async move {
+                        use base64ct::Encoding;
+                        use jota_core::multisig::formats::{MemberEntry, SignatureEntry};
+
+                        let store = jota_core::multisig::MultisigStore::open()?;
+                        let proposal = store.find_proposal_by_prefix(&digest)?;
+                        let config = configs
+                            .iter()
+                            .find(|c| {
+                                c.address().to_string().to_lowercase()
+                                    == proposal.multisig_address.to_lowercase()
+                            })
+                            .ok_or_else(|| anyhow::anyhow!("No config found for this proposal"))?;
+                        let network_name = service.network_name().to_string();
+
+                        let proposal_file = jota_core::multisig::ProposalFile {
+                            version: 1,
+                            file_type: "proposal".to_string(),
+                            network: network_name.clone(),
+                            multisig: jota_core::multisig::MultisigFile {
+                                version: 1,
+                                file_type: "multisig-address".to_string(),
+                                network: network_name,
+                                members: config
+                                    .committee
+                                    .members()
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(i, m)| MemberEntry {
+                                        public_key: m.public_key().clone(),
+                                        weight: m.weight(),
+                                        label: config.labels.get(i).cloned().unwrap_or_default(),
+                                    })
+                                    .collect(),
+                                threshold: config.committee.threshold(),
+                            },
+                            tx_bytes: base64ct::Base64::encode_string(&proposal.tx_bytes),
+                            proposer: proposal.proposer.clone(),
+                            created_at: jota_core::multisig::format_timestamp(proposal.created_at),
+                            signatures: proposal
+                                .signatures
+                                .iter()
+                                .map(|s| SignatureEntry {
+                                    public_key: s.member_key.clone(),
+                                    signature: s.signature.clone(),
+                                    signed_at: jota_core::multisig::format_timestamp(s.signed_at),
+                                })
+                                .collect(),
+                        };
+
+                        let json = serde_json::to_string_pretty(&proposal_file)
+                            .map_err(|e| anyhow::anyhow!("Failed to serialize: {e}"))?;
+
+                        let short_id = &proposal.tx_digest[..8.min(proposal.tx_digest.len())];
+                        let default_name = format!("{short_id}.jota-proposal");
+
+                        let handle = rfd::AsyncFileDialog::new()
+                            .add_filter("Jota Proposal", &["jota-proposal"])
+                            .set_file_name(&default_name)
+                            .set_title("Export Proposal")
+                            .save_file()
+                            .await;
+
+                        let path = match handle {
+                            Some(file) => file.path().to_path_buf(),
+                            None => return Ok("Export cancelled.".to_string()),
+                        };
+                        std::fs::write(&path, &json)
+                            .map_err(|e| anyhow::anyhow!("Failed to write: {e}"))?;
+                        Ok(format!("Exported: {}", path.display()))
+                    },
+                    |r: Result<String, anyhow::Error>| {
+                        Message::MultisigProposalExported(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+
+            Message::MultisigProposalExported(result) => {
+                match result {
+                    Ok(msg) => self.success_message = Some(msg),
+                    Err(e) => self.error_message = Some(e),
+                }
+                Task::none()
+            }
+
+            // -- Multisig Sign External --
+            Message::MultisigSignExternalOpen => {
+                self.multisig_sign_visible = true;
+                self.multisig_sign_proposal_file = None;
+                self.multisig_sign_error = None;
+                self.multisig_sign_external_path.clear();
+                Task::none()
+            }
+
+            Message::MultisigSignExternalPathChanged(v) => {
+                self.multisig_sign_external_path = v;
+                Task::none()
+            }
+
+            Message::MultisigSignExternalLoadFile => {
+                let path = self.multisig_sign_external_path.trim().to_string();
+                if path.is_empty() {
+                    self.multisig_sign_error = Some("Please enter a file path.".into());
+                    return Task::none();
+                }
+                let Some(info) = &self.wallet_info else {
+                    return Task::none();
+                };
+                let network_name = info.service.network_name().to_string();
+
+                match std::fs::read(&path) {
+                    Ok(data) => match String::from_utf8(data) {
+                        Ok(json) => {
+                            match serde_json::from_str::<jota_core::multisig::ProposalFile>(&json) {
+                                Ok(prop_file) => {
+                                    if let Err(e) = prop_file.validate(&network_name) {
+                                        self.multisig_sign_error =
+                                            Some(format!("Invalid proposal file: {e}"));
+                                    } else {
+                                        self.multisig_sign_proposal_file = Some(prop_file);
+                                        self.multisig_sign_error = None;
+                                    }
+                                }
+                                Err(e) => {
+                                    self.multisig_sign_error =
+                                        Some(format!("Failed to parse proposal: {e}"));
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            self.multisig_sign_error = Some("File is not valid UTF-8".into());
+                        }
+                    },
+                    Err(e) => {
+                        self.multisig_sign_error = Some(format!("Failed to read file: {e}"));
+                    }
+                }
+                Task::none()
+            }
+
+            Message::MultisigSignExternalReviewed => {
+                let Some(info) = &self.wallet_info else {
+                    return Task::none();
+                };
+                let Some(prop_file) = self.multisig_sign_proposal_file.clone() else {
+                    return Task::none();
+                };
+                let service = info.service.clone();
+                self.loading += 1;
+                self.multisig_sign_error = None;
+
+                Task::perform(
+                    async move {
+                        use anyhow::Context;
+                        use base64ct::Encoding;
+                        use jota_core::multisig::*;
+
+                        let tx_bytes = base64ct::Base64::decode_vec(&prop_file.tx_bytes)
+                            .context("Invalid base64 in proposal tx_bytes")?;
+
+                        // Verify we're a member of this committee
+                        let pk_bytes = service.signer().public_key_bytes()?;
+                        let local_pk = jota_core::MultisigMemberPublicKey::Ed25519(
+                            jota_core::Ed25519PublicKey::new(
+                                pk_bytes
+                                    .as_slice()
+                                    .try_into()
+                                    .map_err(|_| anyhow::anyhow!("Invalid public key length"))?,
+                            ),
+                        );
+                        if !prop_file
+                            .multisig
+                            .members
+                            .iter()
+                            .any(|m| m.public_key == local_pk)
+                        {
+                            anyhow::bail!("Your key is not a member of this multisig committee.");
+                        }
+
+                        let (member_key, member_sig) =
+                            sign_proposal(service.network(), service.signer().as_ref(), &tx_bytes)
+                                .await?;
+
+                        // Find our label in the proposal's member list
+                        let our_label = prop_file
+                            .multisig
+                            .members
+                            .iter()
+                            .find(|m| m.public_key == member_key)
+                            .map(|m| m.label.clone())
+                            .unwrap_or_else(|| "unknown".to_string());
+
+                        let tx_digest = compute_tx_digest(&tx_bytes)?;
+                        let short_id = &tx_digest[..8.min(tx_digest.len())];
+
+                        let multisig_addr = prop_file.multisig.to_committee()?.derive_address();
+
+                        let sig_file = jota_core::multisig::SignatureFile {
+                            version: 1,
+                            file_type: "signature".to_string(),
+                            multisig_address: multisig_addr.to_string(),
+                            tx_digest: tx_digest.clone(),
+                            public_key: member_key,
+                            signature: member_sig,
+                            signed_at: format_timestamp(timestamp_now()),
+                        };
+
+                        let json = serde_json::to_string_pretty(&sig_file)
+                            .map_err(|e| anyhow::anyhow!("Failed to serialize: {e}"))?;
+
+                        let our_label: String = our_label
+                            .chars()
+                            .filter(|c| *c != '/' && *c != '\\' && *c != '.')
+                            .collect();
+                        let our_label = if our_label.is_empty() {
+                            "signer".to_string()
+                        } else {
+                            our_label
+                        };
+                        let default_name = format!("{our_label}-{short_id}.jota-sig");
+
+                        let handle = rfd::AsyncFileDialog::new()
+                            .add_filter("Jota Signature", &["jota-sig"])
+                            .set_file_name(&default_name)
+                            .set_title("Save Signature")
+                            .save_file()
+                            .await;
+
+                        let path = match handle {
+                            Some(file) => file.path().to_path_buf(),
+                            None => return Ok("Export cancelled.".to_string()),
+                        };
+                        std::fs::write(&path, &json)
+                            .map_err(|e| anyhow::anyhow!("Failed to write: {e}"))?;
+                        Ok(format!("Signature saved: {}", path.display()))
+                    },
+                    |r: Result<String, anyhow::Error>| {
+                        Message::MultisigSignExternalCompleted(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+
+            Message::MultisigSignExternalCompleted(result) => {
+                self.loading = self.loading.saturating_sub(1);
+                match result {
+                    Ok(msg) => {
+                        self.multisig_sign_visible = false;
+                        self.multisig_sign_proposal_file = None;
+                        self.multisig_sign_error = None;
+                        self.multisig_sign_external_path.clear();
+                        self.success_message = Some(msg);
+                        return self.load_multisig();
+                    }
+                    Err(e) => self.multisig_sign_error = Some(e),
+                }
+                Task::none()
+            }
+
+            Message::MultisigSignExternalClose => {
+                self.multisig_sign_visible = false;
+                self.multisig_sign_proposal_file = None;
+                self.multisig_sign_error = None;
+                self.multisig_sign_external_path.clear();
+                Task::none()
+            }
+
+            // -- Multisig Import Signature --
+            Message::MultisigImportSignature(digest) => {
+                self.multisig_import_sig_digest = Some(digest);
+                self.multisig_import_sig_visible = true;
+                self.multisig_import_sig_path.clear();
+                Task::none()
+            }
+
+            Message::MultisigImportSigPathChanged(v) => {
+                self.multisig_import_sig_path = v;
+                Task::none()
+            }
+
+            Message::MultisigImportSigConfirm => {
+                let path = self.multisig_import_sig_path.trim().to_string();
+                if path.is_empty() {
+                    self.error_message = Some("Please enter a file path.".into());
+                    return Task::none();
+                }
+                let Some(digest) = self.multisig_import_sig_digest.clone() else {
+                    return Task::none();
+                };
+                let Some(info) = &self.wallet_info else {
+                    return Task::none();
+                };
+                let network_name = info.service.network_name().to_string();
+                let configs = self.multisig_configs.clone();
+                self.loading += 1;
+                self.error_message = None;
+
+                Task::perform(
+                    async move {
+                        use jota_core::multisig::*;
+
+                        let data = std::fs::read(&path)
+                            .map_err(|e| anyhow::anyhow!("Failed to read file: {e}"))?;
+                        let json = String::from_utf8(data)
+                            .map_err(|_| anyhow::anyhow!("File is not valid UTF-8"))?;
+
+                        let store = MultisigStore::open()?;
+                        let mut proposal = store.find_proposal_by_prefix(&digest)?;
+                        let config = configs
+                            .iter()
+                            .find(|c| {
+                                c.address().to_string().to_lowercase()
+                                    == proposal.multisig_address.to_lowercase()
+                            })
+                            .ok_or_else(|| anyhow::anyhow!("No config found for this proposal"))?;
+
+                        // Try parsing as SignatureFile first
+                        if let Ok(sig_file) = serde_json::from_str::<formats::SignatureFile>(&json)
+                        {
+                            sig_file.validate()?;
+
+                            // Verify digest matches
+                            if sig_file.tx_digest != proposal.tx_digest {
+                                anyhow::bail!(
+                                    "Signature digest mismatch: expected {}, got {}",
+                                    &proposal.tx_digest[..8.min(proposal.tx_digest.len())],
+                                    &sig_file.tx_digest[..8.min(sig_file.tx_digest.len())]
+                                );
+                            }
+
+                            validate_signature(
+                                &config.committee,
+                                &proposal.tx_bytes,
+                                &sig_file.public_key,
+                                &sig_file.signature,
+                                &proposal.signatures,
+                            )?;
+
+                            proposal.signatures.push(CollectedSignature {
+                                member_key: sig_file.public_key,
+                                signature: sig_file.signature,
+                                signed_at: timestamp_now(),
+                            });
+
+                            update_proposal_status(&config.committee, &mut proposal);
+                            store.save_proposal(&proposal)?;
+
+                            return Ok("Signature imported successfully.".to_string());
+                        }
+
+                        // Try parsing as ProposalFile
+                        if let Ok(prop_file) = serde_json::from_str::<formats::ProposalFile>(&json)
+                        {
+                            prop_file.validate(&network_name)?;
+
+                            let added = merge_signatures(
+                                &config.committee,
+                                &mut proposal,
+                                &prop_file.signatures,
+                            )?;
+
+                            store.save_proposal(&proposal)?;
+                            return Ok(format!(
+                                "Merged {added} new signature(s) from proposal file."
+                            ));
+                        }
+
+                        anyhow::bail!(
+                            "Unrecognized file format. Expected .jota-sig or .jota-proposal."
+                        )
+                    },
+                    |r: Result<String, anyhow::Error>| {
+                        Message::MultisigSignatureImported(r.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+
+            Message::MultisigSignatureImported(result) => {
+                self.loading = self.loading.saturating_sub(1);
+                self.multisig_import_sig_visible = false;
+                self.multisig_import_sig_path.clear();
+                self.multisig_import_sig_digest = None;
+                match result {
+                    Ok(msg) => {
+                        self.success_message = Some(msg);
+                        return self.load_multisig();
+                    }
+                    Err(e) => self.error_message = Some(e),
+                }
+                Task::none()
+            }
+
+            // -- Multisig Browse (native file dialogs) --
+            Message::MultisigBrowseImport => Task::perform(
+                async {
+                    let handle = rfd::AsyncFileDialog::new()
+                        .add_filter("Jota Multisig", &["jota-multisig"])
+                        .set_title("Select Multisig File")
+                        .pick_file()
+                        .await;
+                    match handle {
+                        Some(file) => Ok(file.path().to_string_lossy().to_string()),
+                        None => Err("Cancelled".to_string()),
+                    }
+                },
+                Message::MultisigBrowseImportResult,
+            ),
+
+            Message::MultisigBrowseImportResult(result) => {
+                if let Ok(path) = result {
+                    self.multisig_import_path = path;
+                }
+                Task::none()
+            }
+
+            Message::MultisigBrowseSignExternal => Task::perform(
+                async {
+                    let handle = rfd::AsyncFileDialog::new()
+                        .add_filter("Jota Proposal", &["jota-proposal"])
+                        .set_title("Select Proposal File")
+                        .pick_file()
+                        .await;
+                    match handle {
+                        Some(file) => Ok(file.path().to_string_lossy().to_string()),
+                        None => Err("Cancelled".to_string()),
+                    }
+                },
+                Message::MultisigBrowseSignExternalResult,
+            ),
+
+            Message::MultisigBrowseSignExternalResult(result) => {
+                if let Ok(path) = result {
+                    self.multisig_sign_external_path = path;
+                }
+                Task::none()
+            }
+
+            Message::MultisigBrowseImportSig => Task::perform(
+                async {
+                    let handle = rfd::AsyncFileDialog::new()
+                        .add_filter("Jota Signature", &["jota-sig", "jota-proposal"])
+                        .set_title("Select Signature File")
+                        .pick_file()
+                        .await;
+                    match handle {
+                        Some(file) => Ok(file.path().to_string_lossy().to_string()),
+                        None => Err("Cancelled".to_string()),
+                    }
+                },
+                Message::MultisigBrowseImportSigResult,
+            ),
+
+            Message::MultisigBrowseImportSigResult(result) => {
+                if let Ok(path) = result {
+                    self.multisig_import_sig_path = path;
+                }
                 Task::none()
             }
 
@@ -1178,6 +2639,7 @@ impl App {
                 self.loading = self.loading.saturating_sub(1);
                 match result {
                     Ok(info) => {
+                        self.active_multisig = None;
                         self.qr_data = qr_code::Data::new(&info.address_string).ok();
                         self.wallet_info = Some(info);
                         self.balance = None;
@@ -1213,6 +2675,11 @@ impl App {
                 Task::none()
             }
             Message::ConfirmSign => {
+                if self.is_multisig_active() {
+                    self.error_message =
+                        Some("Message signing is not available for multisig addresses.".into());
+                    return Task::none();
+                }
                 let Some(info) = &self.wallet_info else {
                     return Task::none();
                 };
@@ -1311,6 +2778,11 @@ impl App {
                 Task::none()
             }
             Message::ConfirmNotarize => {
+                if self.is_multisig_active() {
+                    self.error_message =
+                        Some("Notarization is not available for multisig addresses.".into());
+                    return Task::none();
+                }
                 let Some(info) = &self.wallet_info else {
                     return Task::none();
                 };
@@ -1760,6 +3232,33 @@ impl App {
         self.notarize_result = None;
         self.send_nft_object_id = None;
         self.send_nft_recipient.clear();
+        self.multisig_selected = None;
+        self.multisig_proposal_selected = None;
+        self.multisig_import_error = None;
+        self.multisig_create_visible = false;
+        self.multisig_create_step = 0;
+        self.multisig_create_name.clear();
+        self.multisig_create_num_participants = "2".to_string();
+        self.multisig_create_threshold.clear();
+        self.multisig_create_members.clear();
+        self.multisig_create_my_weight = "1".to_string();
+        self.multisig_create_my_label = "me".to_string();
+        self.multisig_create_error = None;
+        self.multisig_my_public_key_b64 = None;
+        self.multisig_send_visible = false;
+        self.multisig_send_config_idx = None;
+        self.multisig_send_recipient.clear();
+        self.multisig_send_amount.clear();
+        self.multisig_send_error = None;
+        self.multisig_import_path.clear();
+        self.multisig_import_visible = false;
+        self.multisig_sign_visible = false;
+        self.multisig_sign_proposal_file = None;
+        self.multisig_sign_error = None;
+        self.multisig_sign_external_path.clear();
+        self.multisig_import_sig_digest = None;
+        self.multisig_import_sig_path.clear();
+        self.multisig_import_sig_visible = false;
         self.contact_form_visible = false;
         self.contact_form_name.clear();
         self.contact_form_address.clear();
@@ -1834,21 +3333,31 @@ impl App {
         let svc2 = info.service.clone();
         let svc3 = info.service.clone();
         let network_name = info.service.network_name().to_string();
-        let address_str = info.address.to_string();
+        let addr = self.active_address().unwrap_or(info.address);
+        let address_str = addr.to_string();
         let lookback = self.history_lookback;
 
         Task::batch([
-            Task::perform(async move { svc1.balance().await }, |r: Result<u64, _>| {
-                Message::BalanceUpdated(r.map_err(|e| e.to_string()))
-            }),
             Task::perform(
-                async move {
-                    svc2.sync_transactions(lookback).await?;
-                    let cache = TransactionCache::open()?;
-                    let page =
-                        cache.query(&network_name, &address_str, &TransactionFilter::All, 25, 0)?;
-                    let deltas = cache.query_epoch_deltas(&network_name, &address_str)?;
-                    Ok((page.transactions, page.total, deltas))
+                async move { svc1.network().balance(&addr).await },
+                |r: Result<u64, _>| Message::BalanceUpdated(r.map_err(|e| e.to_string())),
+            ),
+            Task::perform(
+                {
+                    let address_str = address_str.clone();
+                    async move {
+                        svc2.network().sync_transactions(&addr, lookback).await?;
+                        let cache = TransactionCache::open()?;
+                        let page = cache.query(
+                            &network_name,
+                            &address_str,
+                            &TransactionFilter::All,
+                            25,
+                            0,
+                        )?;
+                        let deltas = cache.query_epoch_deltas(&network_name, &address_str)?;
+                        Ok((page.transactions, page.total, deltas))
+                    }
                 },
                 |r: Result<crate::messages::TransactionPage, anyhow::Error>| {
                     Message::TransactionsLoaded(r.map_err(|e| e.to_string()))
@@ -1856,7 +3365,7 @@ impl App {
             ),
             Task::perform(
                 async move {
-                    let balances = svc3.get_token_balances().await?;
+                    let balances = svc3.network().get_token_balances(&addr).await?;
                     let mut meta = Vec::new();
                     for b in &balances {
                         if b.coin_type != "0x2::iota::IOTA" {
@@ -1879,7 +3388,8 @@ impl App {
             return Task::none();
         };
         let network_str = info.service.network_name().to_string();
-        let address_str = info.address.to_string();
+        let addr = self.active_address().unwrap_or(info.address);
+        let address_str = addr.to_string();
         let offset = self.history_page * 25;
 
         Task::perform(
@@ -1906,9 +3416,10 @@ impl App {
         };
         self.loading += 1;
         let service = info.service.clone();
+        let addr = self.active_address().unwrap_or(info.address);
 
         Task::perform(
-            async move { service.get_nfts().await },
+            async move { service.network().get_nfts(&addr).await },
             |r: Result<Vec<NftSummary>, _>| Message::NftsLoaded(r.map_err(|e| e.to_string())),
         )
     }
@@ -1919,9 +3430,10 @@ impl App {
         };
         self.loading += 1;
         let service = info.service.clone();
+        let addr = self.active_address().unwrap_or(info.address);
 
         Task::perform(
-            async move { service.get_stakes().await },
+            async move { service.network().get_stakes(&addr).await },
             |r: Result<Vec<StakedIotaSummary>, _>| {
                 Message::StakesLoaded(r.map_err(|e| e.to_string()))
             },
@@ -1940,6 +3452,25 @@ impl App {
             |r: Result<Vec<ValidatorSummary>, _>| {
                 Message::ValidatorsLoaded(r.map_err(|e| e.to_string()))
             },
+        )
+    }
+
+    fn load_multisig(&mut self) -> Task<Message> {
+        self.loading += 1;
+        Task::perform(
+            async move {
+                let store = jota_core::multisig::MultisigStore::open()?;
+                let configs = store.list_configs()?;
+                let proposals = store.list_proposals()?;
+                Ok((configs, proposals))
+            },
+            |r: Result<
+                (
+                    Vec<jota_core::multisig::MultisigConfig>,
+                    Vec<jota_core::multisig::TransactionProposal>,
+                ),
+                anyhow::Error,
+            >| { Message::MultisigLoaded(r.map_err(|e| e.to_string())) },
         )
     }
 

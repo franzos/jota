@@ -188,6 +188,8 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
         "account".into(),
         "acc".into(),
         "reconnect".into(),
+        "multisig".into(),
+        "ms".into(),
         "password".into(),
         "passwd".into(),
         "help".into(),
@@ -265,13 +267,14 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                                     eprintln!("Error saving wallet: {e}");
                                     continue;
                                 }
-                                let network = match NetworkClient::new(&effective_config, cli.insecure) {
-                                    Ok(n) => n,
-                                    Err(e) => {
-                                        eprintln!("Error reconnecting to network: {e}");
-                                        continue;
-                                    }
-                                };
+                                let network =
+                                    match NetworkClient::new(&effective_config, cli.insecure) {
+                                        Ok(n) => n,
+                                        Err(e) => {
+                                            eprintln!("Error reconnecting to network: {e}");
+                                            continue;
+                                        }
+                                    };
                                 let signer = match wallet.signer() {
                                     Ok(s) => Arc::new(s),
                                     Err(e) => {
@@ -296,6 +299,12 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                     }
                     Ok(Command::Reconnect) => match service.reconnect_signer() {
                         Ok(()) => println!("Device reconnected."),
+                        Err(e) => eprintln!("Error: {e}"),
+                    },
+                    Ok(Command::Multisig {
+                        subcommand: jota_core::commands::MultisigSubcommand::Create { name },
+                    }) => match run_multisig_create_wizard(&name, &wallet, &service).await {
+                        Ok(output) => println!("{output}"),
                         Err(e) => eprintln!("Error: {e}"),
                     },
                     Ok(Command::Password) => {
@@ -465,6 +474,231 @@ fn prompt_mnemonic() -> Result<Zeroizing<String>> {
         anyhow::bail!("Seed phrase should be at least 12 words.");
     }
     Ok(trimmed)
+}
+
+/// Interactive wizard for creating a new multisig address.
+async fn run_multisig_create_wizard(
+    name: &str,
+    wallet: &Wallet,
+    service: &WalletService,
+) -> Result<String> {
+    use base64ct::{Base64, Encoding};
+    use iota_sdk::types::{
+        Ed25519PublicKey, MultisigCommittee, MultisigMember, MultisigMemberPublicKey,
+    };
+    use jota_core::multisig::formats::{MemberEntry, MultisigFile};
+    use jota_core::multisig::{MultisigConfig, MultisigStore};
+    use std::io::Write;
+
+    jota_core::validate_wallet_name(name)?;
+
+    let store = MultisigStore::open()?;
+
+    // Get local signer info
+    let pk_bytes = service.signer().public_key_bytes()?;
+    let local_pk = MultisigMemberPublicKey::Ed25519(Ed25519PublicKey::new(
+        pk_bytes
+            .as_slice()
+            .try_into()
+            .context("Invalid public key length")?,
+    ));
+
+    // Ask number of participants
+    let n_participants: usize = loop {
+        print!("How many participants? ");
+        std::io::stdout().flush()?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        match input.trim().parse::<usize>() {
+            Ok(n) if (2..=10).contains(&n) => break n,
+            _ => println!("Enter a number between 2 and 10."),
+        }
+    };
+
+    // Ask threshold
+    let threshold: u16 = loop {
+        print!(
+            "Threshold (minimum weight to approve) [{}]: ",
+            n_participants
+        );
+        std::io::stdout().flush()?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+        if input.is_empty() {
+            break n_participants as u16;
+        }
+        match input.parse::<u16>() {
+            Ok(t) if t >= 1 && t as usize <= n_participants => break t,
+            _ => println!("Enter a number between 1 and {}.", n_participants),
+        }
+    };
+
+    let mut members = Vec::new();
+    let mut labels = Vec::new();
+
+    // First participant is always the local user
+    println!("\nParticipant 1 (you):");
+    println!("  Using: {} (ed25519)", service.address());
+    let weight: u8 = loop {
+        print!("  Weight [1]: ");
+        std::io::stdout().flush()?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+        if input.is_empty() {
+            break 1;
+        }
+        match input.parse::<u8>() {
+            Ok(w) if w >= 1 => break w,
+            _ => println!("  Enter a positive number."),
+        }
+    };
+
+    let my_label: String = {
+        print!("  Label [me]: ");
+        std::io::stdout().flush()?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+        if input.is_empty() {
+            "me".to_string()
+        } else {
+            input.to_string()
+        }
+    };
+
+    members.push(MultisigMember::new(local_pk.clone(), weight));
+    labels.push(my_label);
+
+    // Remaining participants
+    for i in 2..=n_participants {
+        println!("\nParticipant {}:", i);
+
+        let label: String = loop {
+            print!("  Label: ");
+            std::io::stdout().flush()?;
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+            let input = input.trim().to_string();
+            if !input.is_empty() {
+                break input;
+            }
+            println!("  Label cannot be empty.");
+        };
+
+        let pk: MultisigMemberPublicKey = loop {
+            print!("  Public key (base64): ");
+            std::io::stdout().flush()?;
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+            let input = input.trim();
+            match Base64::decode_vec(input) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    break MultisigMemberPublicKey::Ed25519(Ed25519PublicKey::new(
+                        bytes.try_into().unwrap(),
+                    ));
+                }
+                Ok(bytes) if bytes.len() == 33 => {
+                    // Could be secp256k1 or secp256r1 — ask scheme
+                    print!("  Key scheme [secp256k1/secp256r1]: ");
+                    std::io::stdout().flush()?;
+                    let mut scheme_input = String::new();
+                    std::io::stdin().read_line(&mut scheme_input)?;
+                    let scheme = scheme_input.trim().to_lowercase();
+                    match scheme.as_str() {
+                        "secp256k1" | "k1" => {
+                            break MultisigMemberPublicKey::Secp256k1(
+                                iota_sdk::types::Secp256k1PublicKey::new(bytes.try_into().unwrap()),
+                            );
+                        }
+                        "secp256r1" | "r1" => {
+                            break MultisigMemberPublicKey::Secp256r1(
+                                iota_sdk::types::Secp256r1PublicKey::new(bytes.try_into().unwrap()),
+                            );
+                        }
+                        _ => println!("  Unknown scheme. Enter 'secp256k1' or 'secp256r1'."),
+                    }
+                }
+                _ => {
+                    println!("  Invalid public key. Provide a base64-encoded key (32 bytes for ed25519, 33 bytes for secp256k1/r1).");
+                }
+            }
+        };
+
+        let p_weight: u8 = loop {
+            print!("  Weight [1]: ");
+            std::io::stdout().flush()?;
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+            let input = input.trim();
+            if input.is_empty() {
+                break 1;
+            }
+            match input.parse::<u8>() {
+                Ok(w) if w >= 1 => break w,
+                _ => println!("  Enter a positive number."),
+            }
+        };
+
+        members.push(MultisigMember::new(pk, p_weight));
+        labels.push(label);
+    }
+
+    let committee = MultisigCommittee::new(members, threshold);
+    if !committee.is_valid() {
+        anyhow::bail!(
+            "Invalid committee: check that total weight >= threshold and no duplicate keys."
+        );
+    }
+
+    let addr = committee.derive_address();
+    let total_weight: u16 = committee.members().iter().map(|m| m.weight() as u16).sum();
+
+    println!("\nMultisig address: {}", addr);
+    println!(
+        "Threshold: {} of {} (total weight {}, need {})",
+        threshold, n_participants, total_weight, threshold
+    );
+
+    if !prompt_confirm("\nSave this multisig?") {
+        return Ok("Cancelled.".to_string());
+    }
+
+    let config = MultisigConfig {
+        name: name.to_string(),
+        committee: committee.clone(),
+        labels: labels.clone(),
+        network: wallet.network_config().network,
+        my_key: Some(local_pk),
+    };
+
+    store.save_config(&config)?;
+
+    // Export .jota-multisig
+    let ms_file = MultisigFile {
+        version: 1,
+        file_type: "multisig-address".to_string(),
+        network: service.network_name().to_string(),
+        members: committee
+            .members()
+            .iter()
+            .enumerate()
+            .map(|(i, m)| MemberEntry {
+                public_key: m.public_key().clone(),
+                weight: m.weight(),
+                label: labels.get(i).cloned().unwrap_or_default(),
+            })
+            .collect(),
+        threshold,
+    };
+    let json = serde_json::to_string_pretty(&ms_file)?;
+    let filename = format!("{name}.jota-multisig");
+    std::fs::write(&filename, &json).with_context(|| format!("Failed to write {filename}"))?;
+
+    Ok(format!(
+        "Saved: {name}\nExported: {filename} — share this with the other participants",
+    ))
 }
 
 /// Build the appropriate signer for the REPL session.

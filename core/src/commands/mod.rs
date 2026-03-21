@@ -24,6 +24,41 @@ pub enum ContactSubcommand {
     Import { file: String },
 }
 
+/// Subcommands for the `multisig` command.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MultisigSubcommand {
+    /// Create a new multisig address (interactive wizard)
+    Create { name: String },
+    /// List configured multisig addresses
+    List,
+    /// Show multisig details: multisig show <name>
+    Show { name: String },
+    /// Import a multisig definition from file: multisig import <file>
+    Import { file: String },
+    /// Export multisig definition: multisig export <name>
+    Export { name: String },
+    /// Remove a multisig config: multisig remove <name>
+    Remove { name: String },
+    /// Propose a transfer: multisig send <name> <recipient> <amount>
+    Send {
+        name: String,
+        recipient: String,
+        amount: String,
+    },
+    /// List pending proposals: multisig proposals [name]
+    Proposals { name: Option<String> },
+    /// Show proposal details: multisig proposal <id>
+    Proposal { id: String },
+    /// Cancel a proposal: multisig cancel <id>
+    Cancel { id: String },
+    /// Add a signature: multisig add-sig <id> <file>
+    AddSig { id: String, file: String },
+    /// Submit a proposal: multisig submit <id>
+    Submit { id: String },
+    /// Sign an external proposal: multisig sign <file>
+    Sign { file: String },
+}
+
 /// UTF-8 safe string truncation for confirmation prompts.
 fn truncate_preview(s: &str, max_chars: usize) -> String {
     if s.chars().count() <= max_chars {
@@ -95,6 +130,8 @@ pub enum Command {
     Notarize { message: String },
     /// Address book management
     Contact { subcommand: ContactSubcommand },
+    /// Multisig operations
+    Multisig { subcommand: MultisigSubcommand },
     /// Change wallet password
     Password,
     /// Reconnect the hardware wallet device
@@ -174,6 +211,17 @@ impl Command {
                     "Notarize \"{preview}\" on-chain? This is permanent, publicly visible, and costs gas."
                 ))
             }
+            Command::Multisig {
+                subcommand: MultisigSubcommand::Send { name, amount, .. },
+            } => Some(format!(
+                "Propose sending {amount} IOTA from multisig '{name}'?"
+            )),
+            Command::Multisig {
+                subcommand: MultisigSubcommand::Submit { id },
+            } => Some(format!("Submit multisig proposal {id} on-chain?")),
+            Command::Multisig {
+                subcommand: MultisigSubcommand::Remove { name },
+            } => Some(format!("Remove multisig config '{name}'?")),
             Command::Seed => Some("This will display sensitive data. Continue?".to_string()),
             Command::Password => Some("Change wallet password?".to_string()),
             _ => None,
