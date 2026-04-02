@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.2.6] - 2026-04-02
 
 ### Changed
 - Wallet file format now includes a version header and KDF parameters for forward compatibility
