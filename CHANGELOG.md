@@ -1,3 +1,10 @@
+## [Unreleased]
+
+### Changed
+- Wallet file format now includes a version header and KDF parameters for forward compatibility
+- Software wallets store and verify their derived address on open, detecting corruption or tampering
+- Windows wallet files written with fsync for durability (matching Unix behavior)
+
 ## [0.2.5] - 2026-03-21
 
 ### Added

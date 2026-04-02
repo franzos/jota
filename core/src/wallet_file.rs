@@ -1,7 +1,7 @@
 /// Encrypted wallet file persistence.
 ///
-/// File format: salt (32 bytes) || nonce (12 bytes) || ciphertext
-/// Key derivation: Argon2id from password + salt
+/// File format: version (4 bytes, LE u32) || salt (32 bytes) || nonce (12 bytes) || ciphertext
+/// Key derivation: Argon2id from password + salt (params determined by version)
 /// Encryption: AES-256-GCM
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
@@ -9,19 +9,37 @@ use argon2::{Algorithm, Argon2, Params, Version};
 use thiserror::Error;
 use zeroize::{Zeroize, Zeroizing};
 
+const FORMAT_VERSION: u32 = 1;
+const VERSION_LEN: usize = 4;
 const SALT_LEN: usize = 32;
 const NONCE_LEN: usize = 12;
 const KEY_LEN: usize = 32;
 
-// Argon2id parameters — tuned for interactive use (not too slow, not too weak)
-const ARGON2_M_COST: u32 = 65536; // 64 MiB
-const ARGON2_T_COST: u32 = 3;
-const ARGON2_P_COST: u32 = 1;
+/// KDF parameters for a given format version.
+struct KdfParams {
+    m_cost: u32,
+    t_cost: u32,
+    p_cost: u32,
+}
+
+/// Map a format version to its Argon2id parameters.
+fn kdf_params_for_version(version: u32) -> Result<KdfParams, WalletFileError> {
+    match version {
+        1 => Ok(KdfParams {
+            m_cost: 65536, // 64 MiB
+            t_cost: 3,
+            p_cost: 1,
+        }),
+        _ => Err(WalletFileError::UnsupportedVersion(version)),
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum WalletFileError {
     #[error("wallet file is too short to contain valid encrypted data")]
     FileTooShort,
+    #[error("unsupported wallet format version: {0}")]
+    UnsupportedVersion(u32),
     #[error("decryption failed — wrong password or corrupt file")]
     DecryptionFailed,
     #[error("key derivation failed — argon2 internal error")]
@@ -35,8 +53,12 @@ pub enum WalletFileError {
 }
 
 /// Derive a 256-bit key from password + salt using Argon2id.
-fn derive_key(password: &[u8], salt: &[u8]) -> Result<[u8; KEY_LEN], WalletFileError> {
-    let params = Params::new(ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST, Some(KEY_LEN))
+fn derive_key(
+    password: &[u8],
+    salt: &[u8],
+    kdf: &KdfParams,
+) -> Result<[u8; KEY_LEN], WalletFileError> {
+    let params = Params::new(kdf.m_cost, kdf.t_cost, kdf.p_cost, Some(KEY_LEN))
         .map_err(|_| WalletFileError::KeyDerivationFailed)?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
@@ -47,12 +69,13 @@ fn derive_key(password: &[u8], salt: &[u8]) -> Result<[u8; KEY_LEN], WalletFileE
     Ok(key)
 }
 
-/// Encrypt plaintext with AES-256-GCM. Returns salt || nonce || ciphertext.
+/// Encrypt plaintext with AES-256-GCM. Returns version || salt || nonce || ciphertext.
 pub fn encrypt(plaintext: &[u8], password: &[u8]) -> Result<Vec<u8>, WalletFileError> {
+    let kdf = kdf_params_for_version(FORMAT_VERSION)?;
     let salt: [u8; SALT_LEN] = rand::random();
     let nonce_bytes: [u8; NONCE_LEN] = rand::random();
 
-    let mut key = derive_key(password, &salt)?;
+    let mut key = derive_key(password, &salt, &kdf)?;
     let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| WalletFileError::DecryptionFailed)?;
     key.zeroize();
 
@@ -61,26 +84,34 @@ pub fn encrypt(plaintext: &[u8], password: &[u8]) -> Result<Vec<u8>, WalletFileE
         .encrypt(&nonce, plaintext)
         .map_err(|_| WalletFileError::DecryptionFailed)?;
 
-    let mut output = Vec::with_capacity(SALT_LEN + NONCE_LEN + ciphertext.len());
+    let mut output = Vec::with_capacity(VERSION_LEN + SALT_LEN + NONCE_LEN + ciphertext.len());
+    output.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
     output.extend_from_slice(&salt);
     output.extend_from_slice(&nonce_bytes);
     output.extend_from_slice(&ciphertext);
     Ok(output)
 }
 
-/// Decrypt data produced by `encrypt`. Expects salt || nonce || ciphertext.
+/// Decrypt data produced by `encrypt`. Expects version || salt || nonce || ciphertext.
 /// Returns `Zeroizing<Vec<u8>>` so the plaintext is automatically zeroized on drop.
 pub fn decrypt(data: &[u8], password: &[u8]) -> Result<Zeroizing<Vec<u8>>, WalletFileError> {
-    let min_len = SALT_LEN + NONCE_LEN + 1;
+    let min_len = VERSION_LEN + SALT_LEN + NONCE_LEN + 1;
     if data.len() < min_len {
         return Err(WalletFileError::FileTooShort);
     }
 
-    let salt = &data[..SALT_LEN];
-    let nonce_bytes = &data[SALT_LEN..SALT_LEN + NONCE_LEN];
-    let ciphertext = &data[SALT_LEN + NONCE_LEN..];
+    let version = u32::from_le_bytes(
+        data[..VERSION_LEN]
+            .try_into()
+            .map_err(|_| WalletFileError::FileTooShort)?,
+    );
+    let kdf = kdf_params_for_version(version)?;
 
-    let mut key = derive_key(password, salt)?;
+    let salt = &data[VERSION_LEN..VERSION_LEN + SALT_LEN];
+    let nonce_bytes = &data[VERSION_LEN + SALT_LEN..VERSION_LEN + SALT_LEN + NONCE_LEN];
+    let ciphertext = &data[VERSION_LEN + SALT_LEN + NONCE_LEN..];
+
+    let mut key = derive_key(password, salt, &kdf)?;
     let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| WalletFileError::DecryptionFailed)?;
     key.zeroize();
 
@@ -129,9 +160,17 @@ pub fn save_to_file(
         file.write_all(&encrypted)?;
         file.sync_all()?;
     }
+    // Windows: no restrictive ACLs without extra deps, but we still fsync for durability.
     #[cfg(not(unix))]
     {
-        std::fs::write(&tmp_path, &encrypted)?;
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&tmp_path)?;
+        file.write_all(&encrypted)?;
+        file.sync_all()?;
     }
 
     std::fs::rename(&tmp_path, path)?;

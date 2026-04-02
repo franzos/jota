@@ -60,7 +60,7 @@ pub struct WalletData {
     pub accounts: Vec<AccountRecord>,
     #[serde(default)]
     pub wallet_type: WalletType,
-    /// Stored address for hardware wallets (to verify on reconnect).
+    /// Stored address — verified on open to detect corruption or tampering.
     #[serde(default)]
     pub address: Option<String>,
 }
@@ -167,7 +167,7 @@ impl Wallet {
                 last_balance: None,
             }],
             wallet_type: WalletType::Software,
-            address: None,
+            address: Some(address.to_string()),
         };
 
         persist_wallet_to_file(&path, &data, password)?;
@@ -195,6 +195,19 @@ impl Wallet {
                     WalletError::InvalidState("Software wallet is missing its mnemonic.".into())
                 })?;
                 let (private_key, address) = derive_key(mnemonic, data.active_account_index)?;
+
+                // Verify derived address matches stored address (if present)
+                if let Some(stored) = &data.address {
+                    let stored_addr = stored.parse::<Address>().map_err(|e| {
+                        WalletError::InvalidState(format!("Invalid stored address: {e}"))
+                    })?;
+                    if stored_addr != address {
+                        return Err(WalletError::InvalidState(
+                            "Derived address does not match stored address. Wallet file may be corrupt.".into(),
+                        ));
+                    }
+                }
+
                 Ok(Self {
                     data,
                     private_key: Some(Arc::new(private_key)),
@@ -239,7 +252,7 @@ impl Wallet {
                 last_balance: None,
             }],
             wallet_type: WalletType::Software,
-            address: None,
+            address: Some(address.to_string()),
         };
 
         persist_wallet_to_file(&path, &data, password)?;
