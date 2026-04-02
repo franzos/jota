@@ -277,7 +277,12 @@ pub(crate) fn socket_path() -> PathBuf {
         let uid = unsafe { libc::getuid() };
         #[cfg(not(unix))]
         let uid = 0u32;
-        std::env::temp_dir().join(format!("jota-{uid}"))
+        let fallback = std::env::temp_dir().join(format!("jota-{uid}"));
+        eprintln!(
+            "Warning: $XDG_RUNTIME_DIR not set, using {}",
+            fallback.display()
+        );
+        fallback
     });
     runtime.join("jota").join("gui.sock")
 }
@@ -388,6 +393,32 @@ fn create_socket_listener_stream() -> impl iced::futures::Stream<Item = Message>
                 let _ = std::fs::create_dir_all(parent);
             }
 
+            // Verify the parent directory is owned by us (prevent pre-creation attack)
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::MetadataExt;
+                if let Some(parent) = path.parent() {
+                    if let Ok(meta) = std::fs::metadata(parent) {
+                        let uid = unsafe { libc::getuid() };
+                        if meta.uid() != uid {
+                            eprintln!("socket listener: {} is owned by uid {}, expected {}. Refusing to bind.", parent.display(), meta.uid(), uid);
+                            std::future::pending::<()>().await;
+                            unreachable!();
+                        }
+                    }
+                }
+            }
+
+            // Restrict parent directory permissions
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                if let Some(parent) = path.parent() {
+                    let _ =
+                        std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700));
+                }
+            }
+
             let listener = match UnixListener::bind(&path) {
                 Ok(l) => l,
                 Err(e) => {
@@ -396,6 +427,13 @@ fn create_socket_listener_stream() -> impl iced::futures::Stream<Item = Message>
                     unreachable!();
                 }
             };
+
+            // Restrict socket file permissions
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+            }
 
             // Blocking accept loop in a dedicated thread
             let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Message>();

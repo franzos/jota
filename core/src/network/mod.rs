@@ -24,11 +24,16 @@ pub struct NetworkClient {
 }
 
 /// Reject non-HTTPS node URLs unless `allow_insecure` is set.
-fn validate_node_url(url: &str, allow_insecure: bool) -> Result<()> {
+/// HTTP is always rejected on mainnet regardless of `allow_insecure` — the risk
+/// of MITM interception stealing funds is too high.
+fn validate_node_url(url: &str, allow_insecure: bool, network: Network) -> Result<()> {
     if url.starts_with("https://") {
         return Ok(());
     }
     if url.starts_with("http://") {
+        if matches!(network, Network::Mainnet) {
+            bail!("Refusing to connect over plain HTTP on mainnet. This protects your funds from interception.");
+        }
         if allow_insecure {
             return Ok(());
         }
@@ -90,7 +95,7 @@ impl NetworkClient {
                     .custom_url
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("Custom network requires a node URL"))?;
-                validate_node_url(url, allow_insecure)?;
+                validate_node_url(url, allow_insecure, config.network)?;
                 let c = Client::new(url).context("Failed to create client with custom URL")?;
                 (c, url.clone())
             }
@@ -105,7 +110,7 @@ impl NetworkClient {
 
     /// Create a client pointed at an arbitrary GraphQL endpoint.
     pub fn new_custom(url: &str, allow_insecure: bool) -> Result<Self> {
-        validate_node_url(url, allow_insecure)?;
+        validate_node_url(url, allow_insecure, Network::Custom)?;
         let client = Client::new(url).context("Failed to create client with custom URL")?;
         Ok(Self {
             client,
@@ -319,6 +324,18 @@ mod tests {
                 "should not reject due to HTTP scheme when --insecure is set"
             );
         }
+    }
+
+    #[test]
+    fn rejects_http_on_mainnet_even_with_insecure() {
+        let err = validate_node_url("http://evil.com/graphql", true, Network::Mainnet)
+            .err()
+            .expect("should reject HTTP on mainnet");
+        assert!(
+            err.to_string()
+                .contains("Refusing to connect over plain HTTP on mainnet"),
+            "error should mention mainnet protection, got: {err}"
+        );
     }
 
     #[test]

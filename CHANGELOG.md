@@ -5,6 +5,10 @@
 - Software wallets store and verify their derived address on open, detecting corruption or tampering
 - Windows wallet files written with fsync for durability (matching Unix behavior)
 
+### Fixed
+- Plaintext HTTP blocked on mainnet regardless of `--insecure` flag
+- Socket directory ownership verified before binding, permissions restricted to owner
+
 ## [0.2.5] - 2026-03-21
 
 ### Added
