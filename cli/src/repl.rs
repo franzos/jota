@@ -80,9 +80,21 @@ pub async fn run_repl(cli: &Cli) -> Result<()> {
                     Wallet::create_new(wallet_path.clone(), password.as_bytes(), network_config)?;
                 println!();
                 println!("New wallet created in {}", wallet_path.display());
-                println!("IMPORTANT: Write down your seed phrase and keep it safe:");
+                println!();
+                println!("IMPORTANT: Write down your seed phrase and keep it safe.");
+                println!("It will be cleared from the screen once you press Enter.");
                 match w.mnemonic() {
-                    Some(mnemonic) => println!("  {}", mnemonic),
+                    Some(mnemonic) => {
+                        println!();
+                        println!("  {}", mnemonic);
+                        println!();
+                        print!("Press Enter to clear the seed phrase from screen...");
+                        std::io::Write::flush(&mut std::io::stdout()).ok();
+                        let _ = std::io::stdin().read_line(&mut String::new());
+                        // Move up 4 lines (blank, mnemonic, blank, prompt) and clear to end of screen
+                        print!("\x1B[4A\x1B[J");
+                        println!("  [seed phrase cleared]");
+                    }
                     None => println!("  Mnemonic not available for hardware wallets."),
                 }
                 println!();

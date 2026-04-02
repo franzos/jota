@@ -3366,14 +3366,13 @@ impl App {
             Task::perform(
                 async move {
                     let balances = svc3.network().get_token_balances(&addr).await?;
-                    let mut meta = Vec::new();
-                    for b in &balances {
-                        if b.coin_type != "0x2::iota::IOTA" {
-                            if let Ok(m) = svc3.resolve_coin_type(&b.coin_type).await {
-                                meta.push(m);
-                            }
-                        }
-                    }
+                    let futs: Vec<_> = balances
+                        .iter()
+                        .filter(|b| b.coin_type != "0x2::iota::IOTA")
+                        .map(|b| svc3.resolve_coin_type(&b.coin_type))
+                        .collect();
+                    let results = iced::futures::future::join_all(futs).await;
+                    let meta: Vec<_> = results.into_iter().filter_map(|r| r.ok()).collect();
                     Ok((balances, meta))
                 },
                 |r: Result<(Vec<TokenBalance>, Vec<CoinMeta>), anyhow::Error>| {

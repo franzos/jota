@@ -321,6 +321,7 @@ impl Wallet {
                 })?;
                 let (private_key, address) = derive_key(mnemonic, index)?;
                 self.private_key = Some(Arc::new(private_key));
+                self.data.address = Some(address.to_string());
                 self.address = address;
             }
             WalletType::Hardware(_) => {

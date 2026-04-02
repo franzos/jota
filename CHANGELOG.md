@@ -8,6 +8,8 @@
 ### Fixed
 - Plaintext HTTP blocked on mainnet regardless of `--insecure` flag
 - Socket directory ownership verified before binding, permissions restricted to owner
+- Seed phrase cleared from screen after user confirms it was written down
+- Token metadata fetched in parallel instead of sequentially
 
 ## [0.2.5] - 2026-03-21
 
